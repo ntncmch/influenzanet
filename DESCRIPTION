@@ -1,8 +1,11 @@
 Package: influenzanet
-Title: Tools for cleaning, combining and analysing data collected by Influenzanet
+Title: Tools for cleaning, combining and analysing data collected by
+    Influenzanet
 Version: 0.1
-Authors@R: Anton Camacho <ntncmch@gmail.com> [aut, cre]
+Authors@R: person(given="Anton", family="Camacho", email="ntncmch@gmail.com",
+    role=c("aut","cre"))
 Description: 
-Depends: R (>= 3.0.2)
+Depends:
+    R (>= 3.0.2)
 License: GPL-2
 LazyData: true

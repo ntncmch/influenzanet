@@ -1,0 +1,92 @@
+\name{template dico}
+\alias{cause_illness_7}
+\alias{change_routine_3}
+\alias{date_ymd}
+\alias{medication_logical}
+\alias{phone_logical}
+\alias{rename_only}
+\alias{same_bout_3}
+\alias{still_ill_3}
+\alias{still_off_3}
+\alias{sudden_onset_of_4}
+\alias{symptom_logical}
+\alias{template dico}
+\alias{time_off_8}
+\alias{time_to_AV_7}
+\alias{time_to_phone_7}
+\alias{time_to_visit_7}
+\alias{top_fever_7}
+\alias{visit_logical}
+\title{Template dictionary}
+\usage{
+time_to_visit_7(from_name = NULL, who = c("GP", "hosp", "AE", "other"),
+  CR_rm = FALSE)
+
+time_to_phone_7(from_name = NULL, who = c("GP_recept", "GP_doctor",
+  "NHS_direct", "other"), CR_rm = FALSE)
+
+time_to_AV_7(from_name = NULL, CR_rm = FALSE)
+
+cause_illness_7(from_name = NULL)
+
+top_fever_7(from_name = NULL, CR_rm = FALSE)
+
+change_routine_3(from_name = NULL)
+
+same_bout_3(from_name = NULL, CR_rm = FALSE)
+
+time_off_8(from_name = NULL)
+
+sudden_onset_of_4(from_name = NULL, what = c("sympt", "fever"),
+  CR_rm = FALSE)
+
+still_off_3(from_name = NULL)
+
+still_ill_3(from_name = NULL)
+
+visit_logical(from_name = NULL, who = c("no", "GP", "AE", "hosp", "other",
+  "schedul"))
+
+phone_logical(from_name = NULL, who = c("no", "GP_recept", "GP_doctor",
+  "NHS_direct", "other"))
+
+medication_logical(from_name = NULL, med = c("no", "pain", "cough", "AV",
+  "AB", "other", "CR"), CR_rm = FALSE)
+
+symptom_logical(from_name = NULL, sympt = c("none", "fever", "chills",
+  "nose", "sneeze", "throat", "cough", "breath", "head", "muscle_joint",
+  "chest", "tired", "appetite", "phlegm", "eyes", "nausea", "vomit",
+  "diarrhoea", "stomach", "other"))
+
+date_ymd(from_name = NULL, date = c("report_date", "comp_time",
+  "symptom_start", "symptom_end"))
+
+rename_only(from_name = NULL, to_name = NULL)
+}
+\arguments{
+  \item{from_name}{character, old name to be replaced}
+
+  \item{who}{character, who did participant visited,
+  phoned?}
+
+  \item{CR_rm}{if \code{TRUE}, the response "Can't
+  remember" are ignored}
+
+  \item{what}{character, suddden onset of what?}
+
+  \item{med}{character, name of medication}
+
+  \item{sympt}{character, name of symptom}
+
+  \item{date}{character, type of date reported}
+}
+\value{
+list
+}
+\description{
+These functions are wrapers of \code{\link{variable_dico}}
+that ensure the use of valid names for flunet variables.
+The last digit indicates the number of levels for this
+variable.
+}
+
