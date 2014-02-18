@@ -48,21 +48,53 @@ variable_name_OK <- function(var_name=NULL){
 
 #'Dictionary of flunet variable
 #'
-#'Create a dictionary for a variable with all necessary information to convert it into a flunet object
-#' @param rename named character vector, with new names as values, and old names as names.
-#' @param revalue named character vector, with new values as values, and old values as names
-#' @param is_factor logical, if \code{TRUE} the variable will be considered as a factor
-#' @param is_ordered if \code{TRUE} the variable will be considered as an ordered factor
-#' @param is_logical if \code{TRUE} the variable will be considered as logical (\code{TRUE}, \code{FALSE})
-#' @param is_date if \code{TRUE} the variable will be considered as a date
-#' @param order_date date format orders to look for ("ymd" by default). See \link{\code{lubridate::guess_formats}}.
+#'Create a dictionary for a variable with all necessary information to convert it into a flunet object.
+#' @param from_name,to_name character, old and new variable names. See \code{rename} for alternative argument passing.
+#' @param from_values,to_values character vector, old and new variable values. See \code{revalue} for alternative argument passing.
+#' @param rename named character vector of length 1, with new name as value, and old name as name.
+#' @param revalue named character vector, with new values as values, and old values as names.
+#' @param format character, indicate the R format of the variable.
+#' @param order_date date format orders to look for ("ymd" by default). See \code{\link{lubridate::guess_formats}}.
 #' @export
-#' @return a list 
-variable_dico <- function(rename=NULL,revalue=NULL,is_factor=FALSE,is_ordered=FALSE,is_logical=FALSE,is_date=!is_factor & !is_logical,order_date="ymd") {
+#' @return list
+variable_dico <- function(from_name=NULL,to_name=NULL,from_values=NULL,to_values=NULL,rename=NULL,revalue=NULL,format=c("factor","ordered","numeric","date","character","logical"),order_date="ymd") {
 	
-	stopifnot(is.character(rename),length(rename)==1,!is.null(names(rename)),is.logical(is_factor),is.logical(is_ordered),is.logical(is_logical),is.logical(is_date),is.character(order_date))
+	format <- match.arg(format)
+
+	if(!((is.character(rename) & !is.null(names(rename))) | (is.character(from_name) & is.character(to_name)))){
+		stop("Either rename or from_name and to_name must be provided")
+	}
+
+	if(length(from_values)!=length(to_values)){
+		stop("from_values and to_values must have the same length")
+	}
+
+	if(format=="date" & !is.character(order_date)){
+		stop("invalid order_date for date format")
+	}
+
+	if(!is.null(rename)){
+		from_name <- names(rename)
+		to_name <- as.vector(rename)
+	}
+
+	if(!is.null(revalue)){
+		from_values <- names(revalue)
+		to_values <- as.vector(revalue)
+	}
+
+	ans <- list(from_name=from_name[1],to_name=to_name[1],format=format)
 	
-	return(list(from_name=names(rename),to_name=as.vector(rename),from_levels=names(revalue),to_levels=as.vector(revalue),is_factor=is_factor,is_ordered=is_ordered,is_logical=is_logical,is_date=is_date,order_date=order_date))
+	if(format=="date"){
+		ans$order_date <- order_date
+	}
+
+	if(!is.null(from_values)){
+		ans$from_values <- from_values
+		ans$to_values <- to_values
+	}
+
+	return(ans)
 }
 
 #'Template dictionary
@@ -92,7 +124,7 @@ time_to_visit_7 <- function(from_name=NULL,who=c("GP","hosp","AE","other"),CR_rm
 		revalue <- revalue[-ind]
 	}
 
-	return(variable_dico(rename=rename,revalue=revalue,is_factor=TRUE,is_ordered=TRUE)) 
+	return(variable_dico(rename=rename,revalue=revalue,format="ordered")) 
 }
 
 #' @name template dico
@@ -114,7 +146,7 @@ time_to_phone_7 <- function(from_name=NULL,who=c("GP_recept","GP_doctor","NHS_di
 		revalue <- revalue[-ind]
 	}
 
-	return(variable_dico(rename=rename,revalue=revalue,is_factor=TRUE,is_ordered=TRUE))
+	return(variable_dico(rename=rename,revalue=revalue,format="ordered"))
 }
 
 #' @name template dico
@@ -134,7 +166,7 @@ time_to_AV_7 <- function(from_name=NULL,CR_rm=FALSE) {
 		revalue <- revalue[-ind]
 	}
 
-	return(variable_dico(rename=rename,revalue=revalue,is_factor=TRUE,is_ordered=TRUE))
+	return(variable_dico(rename=rename,revalue=revalue,format="ordered"))
 }
 
 #' @name template dico
@@ -146,7 +178,7 @@ cause_illness_7 <- function(from_name=NULL) {
 	names(rename) <- from_name
 	revalue <- c("6"="unknown","5"="other","4"="asthma","3"="allergy","2"="cold","1"="gastro","0"="ILI")
 
-	return(variable_dico(rename=rename,revalue=revalue,is_factor=TRUE,is_ordered=TRUE))
+	return(variable_dico(rename=rename,revalue=revalue,format="ordered"))
 }
 
 #' @name template dico
@@ -162,7 +194,7 @@ top_fever_7 <- function(from_name=NULL,CR_rm=FALSE) {
 		revalue <- revalue[-ind]
 	}
 
-	return(variable_dico(rename=rename,revalue=revalue,is_factor=TRUE,is_ordered=TRUE))
+	return(variable_dico(rename=rename,revalue=revalue,format="ordered"))
 }
 
 #' @name template dico
@@ -174,7 +206,7 @@ change_routine_3 <- function(from_name=NULL) {
 	names(rename) <- from_name
 	revalue <- c("0"="no","1"="yes","2"="yes + off")
 
-	return(variable_dico(rename=rename,revalue=revalue,is_factor=TRUE,is_ordered=TRUE))
+	return(variable_dico(rename=rename,revalue=revalue,format="ordered"))
 }
 
 #' @name template dico
@@ -190,7 +222,7 @@ same_bout_3 <- function(from_name=NULL,CR_rm=FALSE) {
 		revalue <- revalue[-ind]
 	}
 
-	return(variable_dico(rename=rename,revalue=revalue,is_factor=!CR_rm,is_ordered=!CR_rm,is_logical=CR_rm))
+	return(variable_dico(rename=rename,revalue=revalue,format=ifelse(CR_rm,"logical","ordered")))
 }
 
 #' @name template dico
@@ -202,7 +234,7 @@ time_off_8 <- function(from_name=NULL) {
 	names(rename) <- from_name
 	revalue <- c("0"="1 day", "1"="2 days", "2"="3 days", "3"="4 days", "4"="5 days", "5"="6-10 days", "6"="11-15 days", "7"=">15 days")
 
-	return(variable_dico(rename=rename,revalue=revalue,is_factor=TRUE,is_ordered=TRUE))
+	return(variable_dico(rename=rename,revalue=revalue,format="ordered"))
 }
 
 #' @param what character, suddden onset of what?
@@ -221,7 +253,7 @@ sudden_onset_of_4 <- function(from_name=NULL,what=c("sympt","fever"),CR_rm=FALSE
 		revalue <- revalue[-ind]
 	}
 
-	return(variable_dico(rename=rename,revalue=revalue,is_factor=!CR_rm,is_ordered=!CR_rm,is_logical=CR_rm))
+	return(variable_dico(rename=rename,revalue=revalue,format=ifelse(CR_rm,"logical","ordered")))
 }
 
 #' @name template dico
@@ -233,7 +265,7 @@ still_off_3 <- function(from_name=NULL) {
 	names(rename) <- from_name
 	revalue <- c("2"="other","1"="no","0"="yes")
 
-	return(variable_dico(rename=rename,revalue=revalue,is_factor=TRUE,is_ordered=TRUE))
+	return(variable_dico(rename=rename,revalue=revalue,format="ordered"))
 }
 
 #' @name template dico
@@ -245,7 +277,7 @@ still_ill_3 <- function(from_name=NULL) {
 	names(rename) <- from_name
 	revalue <- c("0"="FALSE","1"="FALSE","2"="TRUE")
 
-	return(variable_dico(rename=rename,revalue=revalue,is_logical=TRUE))
+	return(variable_dico(rename=rename,revalue=revalue,format="logical"))
 }
 
 #' @name template dico
@@ -259,7 +291,7 @@ visit_logical  <- function(from_name=NULL,who=c("no","GP","AE","hosp","other","s
 	names(rename) <- from_name
 	revalue <- c("False"="FALSE","True"="TRUE")
 
-	return(variable_dico(rename=rename,revalue=revalue,is_logical=TRUE))
+	return(variable_dico(rename=rename,revalue=revalue,format="logical"))
 }
 
 #' @name template dico
@@ -273,7 +305,7 @@ phone_logical  <- function(from_name=NULL,who=c("no","GP_recept","GP_doctor","NH
 	names(rename) <- from_name
 	revalue <- c("False"="FALSE","True"="TRUE")
 
-	return(variable_dico(rename=rename,revalue=revalue,is_logical=TRUE))
+	return(variable_dico(rename=rename,revalue=revalue,format="logical"))
 }
 
 #' @param med character, name of medication
@@ -294,7 +326,7 @@ medication_logical  <- function(from_name=NULL,med=c("no","pain","cough","AV","A
 		revalue <- revalue[-ind]
 	}
 
-	return(variable_dico(rename=rename,revalue=revalue,is_logical=TRUE))
+	return(variable_dico(rename=rename,revalue=revalue,format="logical"))
 }
 
 #' @param sympt character, name of symptom
@@ -308,7 +340,7 @@ symptom_logical  <- function(from_name=NULL,sympt=c("none","fever","chills","nos
 	names(rename) <- from_name
 	revalue <- c("False"="FALSE","True"="TRUE")
 
-	return(variable_dico(rename=rename,revalue=revalue,is_logical=TRUE))
+	return(variable_dico(rename=rename,revalue=revalue,format="logical"))
 }
 
 #' @param date character, type of date reported
@@ -322,22 +354,9 @@ date_ymd <- function(from_name=NULL, date=c("report_date","comp_time","symptom_s
 	rename <- match.arg(date)
 	names(rename) <- from_name
 
-	return(variable_dico(rename=rename,is_date=TRUE,order_date="ymd"))
+	return(variable_dico(rename=rename,format="date",order_date="ymd"))
 }
 
-#' @inheritParams variable_dico
-#' @name template dico
-#' @export
-#' @aliases rename_only
-rename_only <- function(from_name=NULL, to_name=NULL) {
-
-	stopifnot(is.character(from_name),is.character(to_name))
-
-	rename <- to_name
-	names(rename) <- from_name
-
-	return(variable_dico(rename=rename,revalue=NULL,is_date=FALSE))
-}
 
 #'Dictionary of the 2012/2013 Flusurvey season
 #'
@@ -351,10 +370,10 @@ rename_only <- function(from_name=NULL, to_name=NULL) {
 #' }
 create_dictionnary_flusurvey_201213 <- function() {
 
-	library(jsonlite)
+	# library(jsonlite)
 	
 	# rename only
-	dico_rename <- Map(rename_only,from_name=c("Person","health"),to_name=c("person_id","health_score"))
+	dico_rename <- Map(variable_dico,from_name=c("Person","health"),to_name=c("person_id","health_score"),format=c("character","numeric"))
 
 	# time to
 	var_time_visit <- c("How.soon.after.your.symptoms.appeared.did.you.first.VISIT.a.medical.service...GP.or.GP.s.practice.nurse..Medical.Service.","How.soon.after.your.symptoms.appeared.did.you.first.VISIT.a.medical.service...Hospital.admission..Medical.Service.","How.soon.after.your.symptoms.appeared.did.you.first.VISIT.a.medical.service...Hospital.accident...emergency.department.out.of.hours.service..Medical.Service.","How.soon.after.your.symptoms.appeared.did.you.first.VISIT.a.medical.service...Other.medical.services..Medical.Service.")
@@ -392,6 +411,9 @@ create_dictionnary_flusurvey_201213 <- function() {
 
 	# TODO: add dico for profile and order of variable
 	dico <- c(dico_rename,dico_time_visit,dico_time_phone,dico_time_AV,dico_cause,dico_top_fever,dico_routine,dico_bout,dico_time_off,dico_sudden,dico_still_off,dico_still_ill,dico_visit,dico_phone,dico_med,dico_date)
+	names(dico) <- "Flusurvey_2012/13"
+	names(dico[[1]]) <- NULL
+
 
 	dico_json <- toJSON(dico,pretty=T)
 

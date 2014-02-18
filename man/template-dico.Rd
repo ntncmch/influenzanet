@@ -4,7 +4,6 @@
 \alias{date_ymd}
 \alias{medication_logical}
 \alias{phone_logical}
-\alias{rename_only}
 \alias{same_bout_3}
 \alias{still_ill_3}
 \alias{still_off_3}
@@ -60,8 +59,6 @@ symptom_logical(from_name = NULL, sympt = c("none", "fever", "chills",
 
 date_ymd(from_name = NULL, date = c("report_date", "comp_time",
   "symptom_start", "symptom_end"))
-
-rename_only(from_name = NULL, to_name = NULL)
 }
 \arguments{
   \item{from_name}{character, old name to be replaced}
