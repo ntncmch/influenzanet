@@ -1,11 +1,11 @@
 influenzanet
 ============
 
-R tools for cleaning, combining and analysing data collected by [Influenzanet][https://www.influenzanet.eu] 
+R tools for cleaning, combining and analysing data collected by [Influenzanet](https://www.influenzanet.eu)
 
-## Development
+## Installation
 
-To install the development version of influenzanet, it's easiest to use the `devtools` package:
+Until a stable version of influenzanet is made available on CRAN, the easiest way to install the development version is using the `devtools` package:
 
     # install.packages("devtools")
     library(devtools)
