@@ -5,7 +5,7 @@ R tools for cleaning, combining and analysing data collected by [Influenzanet](h
 
 ## Installation
 
-Until a stable version of influenzanet is made available on CRAN, the easiest way to install the development version is using the `devtools` package:
+Until a stable version of influenzanet is made available on CRAN, the easiest way to install the development version is to use the `devtools` package:
 
     # install.packages("devtools")
     library(devtools)

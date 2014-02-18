@@ -400,20 +400,20 @@ create_dictionnary_flusurvey_201213 <- function() {
 	var_visit <- paste0("med_visit",0:5)
 	var_phone <- paste0("med_phoneweb",c(0:3,5))
 	var_med <- paste0("medication",0:6)
+	var_sympt <- c("none","fever","chills","nose","sneeze","throat","cough","breath","head","muscle.joint","chest","tired","appetite","phlegm","eyes","nausea","vomit","diarrhoea","stomach","other")
 
 	dico_visit <- Map(visit_logical,from_name=var_visit,who=c("no","GP","AE","hosp","other","schedul"))
 	dico_phone <- Map(phone_logical,from_name=var_phone,who=c("no","GP_recept","GP_doctor","NHS_direct","other"))
 	dico_med <- Map(medication_logical,from_name=var_med,med=c("no","pain","cough","AV","AB","other","CR"))
+	dico_sympt <- Map(symptom_logical,from_name=var_sympt,sympt=c("none","fever","chills","nose","sneeze","throat","cough","breath","head","muscle_joint","chest","tired","appetite","phlegm","eyes","nausea","vomit","diarrhoea","stomach","other"))
 
 	# ISO date
 	var_date <- c("reportdate","Compilation.Date","When.did.the.first.symptoms.appear...0.Open.Answer","When.did.your.symptoms.end...0.Open.Answer")
 	dico_date <- Map(date_ymd,from_name=var_date,date=c("report_date","comp_time","symptom_start","symptom_end"))
 
 	# TODO: add dico for profile and order of variable
-	dico <- c(dico_rename,dico_time_visit,dico_time_phone,dico_time_AV,dico_cause,dico_top_fever,dico_routine,dico_bout,dico_time_off,dico_sudden,dico_still_off,dico_still_ill,dico_visit,dico_phone,dico_med,dico_date)
-	names(dico) <- "Flusurvey_2012/13"
-	names(dico[[1]]) <- NULL
-
+	dico <- list(country="UK",season="2012/13",survey=c(dico_rename,dico_time_visit,dico_time_phone,dico_time_AV,dico_cause,dico_top_fever,dico_routine,dico_bout,dico_time_off,dico_sudden,dico_still_off,dico_still_ill,dico_visit,dico_phone,dico_med,dico_sympt,dico_date))
+	names(dico$survey) <- NULL
 
 	dico_json <- toJSON(dico,pretty=T)
 
