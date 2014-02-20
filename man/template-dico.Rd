@@ -1,7 +1,8 @@
 \name{template dico}
+\alias{UHC_logical}
 \alias{cause_illness_7}
 \alias{change_routine_3}
-\alias{date_ymd}
+\alias{date_time}
 \alias{medication_logical}
 \alias{phone_logical}
 \alias{same_bout_3}
@@ -16,6 +17,7 @@
 \alias{time_to_visit_7}
 \alias{top_fever_7}
 \alias{visit_logical}
+\alias{zero_one_to_true_false}
 \title{Template dictionary}
 \usage{
 time_to_visit_7(from_name = NULL, who = c("GP", "hosp", "AE", "other"),
@@ -57,8 +59,15 @@ symptom_logical(from_name = NULL, sympt = c("none", "fever", "chills",
   "chest", "tired", "appetite", "phlegm", "eyes", "nausea", "vomit",
   "diarrhoea", "stomach", "other"))
 
-date_ymd(from_name = NULL, date = c("report_date", "comp_time",
-  "symptom_start", "symptom_end"))
+UHC_logical(from_name = NULL, UHC = c("asthma", "diabetes",
+  "other_respiratory", "heart", "kidney", "immuno"))
+
+date_time(from_name = NULL, date = c("report_date", "comp_time",
+  "symptom_start", "symptom_end", "register_date"))
+
+still_off_3(from_name = NULL)
+
+zero_one_to_true_false(from_name = NULL, to_name = NULL)
 }
 \arguments{
   \item{from_name}{character, old name to be replaced}
@@ -75,7 +84,13 @@ date_ymd(from_name = NULL, date = c("report_date", "comp_time",
 
   \item{sympt}{character, name of symptom}
 
-  \item{date}{character, type of date reported}
+  \item{UHC}{character, name of underlying
+  health-condition}
+
+  \item{date}{character, name of date reported. If name
+  contains "time", the date must be in the ymdhms order to
+  be converted as POSIXlt. Otherwise, format order is ymd
+  and date will be converted as Date.}
 }
 \value{
 list

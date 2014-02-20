@@ -8,7 +8,8 @@ valid_variable_names()
 character vector
 }
 \description{
-This function return a vector of all the valid names for
-flunet variables.
+This function return a list of two vectors with all the
+valid names for flunet variables corresponding to the
+intake and weekly questionaires.
 }
 

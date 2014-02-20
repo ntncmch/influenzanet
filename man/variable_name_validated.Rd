@@ -1,11 +1,14 @@
-\name{variable_name_OK}
-\alias{variable_name_OK}
+\name{variable_name_validated}
+\alias{variable_name_validated}
 \title{Test validity of variable names}
 \usage{
-variable_name_OK(var_name = NULL)
+variable_name_validated(var_name = NULL, survey = NULL)
 }
 \arguments{
   \item{var_name}{character vector}
+
+  \item{survey}{character, the survey where to look at the
+  variable name}
 }
 \value{
 \code{TRUE} or \code{FALSE}
@@ -16,7 +19,7 @@ throw a warning with unmatched names if any.
 }
 \examples{
 \dontrun{
-variable_name_OK(c("not_valid","person_id"))
+is_variable_name_OK(c("not_valid","person_id"))
 }
 }
 \seealso{
