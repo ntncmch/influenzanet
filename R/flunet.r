@@ -125,22 +125,25 @@ flunet <- function(intake_survey=NULL, weekly_survey=NULL, contact_survey=NULL, 
 			if(dico_question$format=="date"){
 				#guess format
 				tmp <- 	survey[[name_question]]
-				format <- guess_formats(tmp,orders=dico_question$order_date)
-				ind <- which(is.null(format))
+				formats <- guess_formats(tmp,orders=dico_question$order_date)
+				ind <- which(is.null(formats))
 				if(length(ind)){
-					stop(length(ind)," dates in the question ",dico_question$from_name," are not in the following order: ",dico_question$order_date,"\nFor instance:",tmp[ind[1]])
+					stop(length(ind)," dates in the question ",name_survey,":",dico_question$from_name," are not in the following order: ",dico_question$order_date,"\nFor instance:",tmp[ind[1]])
 				}
-				format <- unique(format)
-				if(length(format)>1){
-					stop("Question ",dico_question$from_name," has ",length(format)," different date formats: ",paste(format,collapse="\n")," but only 1 supported at the moment")
+				ind <- which(tmp!="")
+				if(length(formats)!=length(ind)){
+					stop("several date formats are not matched for question ",name_survey,":",dico_question$from_name," provide additional order_date in dictionary")
 				}
+				
 				# if question name contains "time" then use POSIXlt, otherwise use Date.
 				if(grepl("time",name_question)){
 					# HMS precision
-					survey[[name_question]] <- as.POSIXlt(x=tmp,format=format)
+					survey[[name_question]] <- as.POSIXlt(NA)
+					survey[[name_question]][ind] <- as.POSIXlt(x=tmp[ind],format=formats)
 				}else{
 					# daily precision
-					survey[[name_question]] <- as.Date(x=tmp,format=format)					
+					survey[[name_question]] <- as.Date(NA)
+					survey[ind,name_question] <- as.Date(x=tmp[ind],format=formats)					
 				}
 			}	
 		}
@@ -148,8 +151,7 @@ flunet <- function(intake_survey=NULL, weekly_survey=NULL, contact_survey=NULL, 
 	}
 
 	# create object 
-	# TODO: add fiels like time_max_to_report etc.
-	structure(list(country=dictionary$country,season=dictionary$season,surveys=surveys),class="flunet")
+	structure(list(country=dictionary$country,season=dictionary$season,surveys=surveys,log=list()),class="flunet")
 }
 
 
