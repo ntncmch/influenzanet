@@ -154,7 +154,7 @@ variable_name_validated <- function(var_name=NULL,survey=NULL){
 #' @param rename named character vector of length 1, with new name as value, and old name as name.
 #' @param revalue named character vector, with new values as values, and old values as names.
 #' @param format character, indicate the R format of the variable.
-#' @param order_date date format orders to look for ("ymd" by default). See \code{\link{lubridate::guess_formats}}.
+#' @param order_date date character vector, format orders to look for ("ymd" by default). See \code{\link{lubridate::guess_formats}}.
 #' @export
 #' @return list
 variable_dico <- function(from_name=NULL,to_name=NULL,from_values=NULL,to_values=NULL,rename=NULL,revalue=NULL,format=c("factor","ordered","numeric","date","character","logical"),order_date="ymd") {
