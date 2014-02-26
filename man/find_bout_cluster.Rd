@@ -1,0 +1,21 @@
+\name{find_bout_cluster}
+\alias{find_bout_cluster}
+\title{cluster bouts}
+\usage{
+find_bout_cluster(df_weekly, lag_symptom_start = 2)
+}
+\arguments{
+  \item{df_weekly}{\code{data.frame} containing weekly
+  survey data for a single participant.}
+}
+\description{
+Cluster different bouts based on closeness of symptom start
+dates.
+}
+\note{
+Temporarily overlapping clusters are grouped. For instance
+if the sequence temporarily ordered bouts is c(1,2,3,4)
+with bouts 1 and 4 belonging to the same cluster, then
+bouts 2 and 3 belong also to this cluster.
+}
+

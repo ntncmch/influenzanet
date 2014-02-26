@@ -24,8 +24,9 @@ variable_dico(from_name = NULL, to_name = NULL, from_values = NULL,
   \item{format}{character, indicate the R format of the
   variable.}
 
-  \item{order_date}{date format orders to look for ("ymd"
-  by default). See \code{\link{lubridate::guess_formats}}.}
+  \item{order_date}{date character vector, format orders to
+  look for ("ymd" by default). See
+  \code{\link{lubridate::guess_formats}}.}
 }
 \value{
 list

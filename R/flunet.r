@@ -135,11 +135,11 @@ flunet <- function(intake_survey=NULL, weekly_survey=NULL, contact_survey=NULL, 
 					stop("several date formats are not matched for question ",name_survey,":",dico_question$from_name," provide additional order_date in dictionary")
 				}
 				
-				# if question name contains "time" then use POSIXlt, otherwise use Date.
+				# if question name contains "time" then use POSIXct, otherwise use Date.
 				if(grepl("time",name_question)){
 					# HMS precision
-					survey[[name_question]] <- as.POSIXlt(NA)
-					survey[[name_question]][ind] <- as.POSIXlt(x=tmp[ind],format=formats)
+					survey[[name_question]] <- as.POSIXct(NA)
+					survey[[name_question]][ind] <- as.POSIXct(x=tmp[ind],format=formats)
 				}else{
 					# daily precision
 					survey[[name_question]] <- as.Date(NA)

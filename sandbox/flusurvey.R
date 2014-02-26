@@ -1373,36 +1373,6 @@ same_bout_as_bool<-function(df_data, CR_as_TRUE=FALSE){
 	return(df_data)
 }
 
-count_episode <- function(df_data, symptom = c("ARI_ecdc", "ILI_ecdc", "ILI_fever"), debug = FALSE) {
-
-	#
-	df_data<-arrange(df_data,person_id,report_date)
-
-	## sometimes an episode (e.g. ILI_ecdc) starts with different symptoms (e.g. ILI_ecdc == FALSE)
-	## the idea is to flag all report belonging to the same bout to TRUE when their is at least one symptom reported.
-	episode <- paste(symptom, "episode", sep = "_")
-	symptom_bool <- paste(symptom, "bool", sep = "_")
-
-	df_data[, symptom_bool] <- df_data[, symptom]
-	df_data[, symptom_bool][is.na(df_data[, symptom_bool])] <- FALSE
-	df_data[, episode] <- NA
-
-	#count only 
-	df_2count<-subset(df_data,person_id%in%person_id[ind_2count])
-	df_keep<-subset(df_data,!person_id%in%person_id[ind_2count])
-
-	df_count <- ddply(df_2count, c("person_id"), function(df) {
-
-
-		return(df)
-	}, .progress = "text")
-
-	df_data<-rbind(df_keep, df_count )
-	df_data<-df_data[setdiff(names(df_data),c(symptom_bool, "same_bout_bool"))]
-	return(df_data)
-
-}
-
 #' Trim longitudinale episode when start by one or more report without ARI symptom
 #' @param df_episode data frame containing only one episode to trim
 #' @inheritParams clean_data_automatically
@@ -1526,74 +1496,6 @@ trim_middle_report <- function(df_episode, delay_in_reporting = 10) {
 
 	return(df_episode)
 
-}
-
-
-#' Define and enumerate all distinct episodes
-#' @param df_data a \link{data.frame} containing FluSurvey data.
-#' @param symptom a \link{vector} of characters containing the names of the symptom episode. Should match the names of \code{df_data}.
-#' @param CR_as_TRUE logical, shall we replace CR (can't remember) by TRUE when participants are asked whether current illness is the same bout as the one reported the previous time.
-#' @inheritParams clean_data_automatically
-#' @return \code{df_data} with additional variables \code{symptom_episode} which enumerate each episodes. For instance \code{1 1 NA NA 2 NA 3 3} indicates that the first episode lasted the two first reports, the 2nd episode occurred on the 5th report, etc.
-#' @note an episode should always start with \code{same_bout} equal \code{NA} or \code{"no"} and (potentially) be followed by a series of \code{same_bout} equal \code{"yes"}.
-#' Reports with \code{same_bout} equal \code{"CR"} (i.e. can't remember) is treated as specified by \code{CR_as_TRUE}.
-#' A \code{symptom} episode is defined by all the reports belonging to the same bout and with at least one occurence of \code{symptom} reported.
-#' @export
-#' @import plyr
-#'
-define_episode <- function(df_data, symptom = c("ARI_ecdc", "ILI_ecdc", "ILI_fever"), CR_as_TRUE = FALSE, delay_in_reporting = 10) {
-	print(paste("Counting episodes for",symptom))
-	flush.console()
-	#
-	#count
-	df_data <- count_episode(df_data, symptom, CR_as_TRUE)
-
-	#clean
-	df_data[, symptom_bool] <- df_data[, symptom]
-	df_data[, symptom_bool][is.na(df_data[, symptom_bool])] <- FALSE
-
-	tmp<-unique(subset(df_data,!ARI_ecdc_bool & !is.na(ARI_ecdc_episode) & still_ill,select=c(person_id, ARI_ecdc_episode)))
-
-	df_2clean<-match_df(df_data,tmp)
-	df_keep<-diff_df(df_data,df_2clean)
-
-
-	df_clean<-ddply(df_2clean,c("person_id","ARI_ecdc_episode"),function(df){
-
-		df1<-df
-		df<-trim_first_report(df, delay_in_reporting)
-		df<-trim_last_report(df, delay_in_reporting)
-		df<-trim_middle_report(df, delay_in_reporting)
-		df2<-df
-		if(!identical(df1,df2)){
-			print(df1[,c(1:2,4:7,12,47)])
-			cat("###############################\n")
-			print(df2[,c(1:2,4:7,12,47)])
-			cat("###############################\n")
-			cat("###############################\n")
-			cat("###############################\n")	
-		}
-
-		return(df)
-	})
-	#recount
-
-
-	#bind
-
-
-	if(0){
-
-
-		tmp3<-ddply(tmp2,c("person_id","ARI_ecdc_episode"),function(df){print(df[,c(1,3,5:9,11:12,2,44)])})
-
-
-		#for 4) and 5), last FFF is still_ill=T, in this case, symptom_end should be between this report and the next one unless dist between report >delay
-#check if there is a symptom_end date in the removed line. If so: erase it unless it is before the new last report | <new_last_report +delay
-# for 1) and 2) check if dist(new_first_report - symptom_start)<report_delay, if not : erase symptom_start
-	}
-
-	return(df_data)
 }
 
 

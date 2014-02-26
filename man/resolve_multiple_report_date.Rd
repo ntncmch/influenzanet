@@ -1,0 +1,16 @@
+\name{resolve_multiple_report_date}
+\alias{resolve_multiple_report_date}
+\title{Merge multiple reports on the same date}
+\usage{
+resolve_multiple_report_date(x)
+}
+\arguments{
+  \item{x}{a \code{flunet} object}
+}
+\description{
+This function merges multiple reports occuring on the same
+day, due to participant error. This function account for
+the fact that multiple reports might contain complementary
+information.
+}
+
