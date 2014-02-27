@@ -1,2 +1,6 @@
 misc
 .Rapp.history
+
+*.sublime-project
+
+*.sublime-workspace
