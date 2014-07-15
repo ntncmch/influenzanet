@@ -46,7 +46,7 @@ flunet <- function(intake_survey=NULL, weekly_survey=NULL, contact_survey=NULL, 
 	# select surveys that are both provided and in context
 	missing_survey_context <- setdiff(names(surveys),names(context$surveys))
 	if(length(missing_survey_context)){
-		warning("The context does not contain the following surveys, which are thus ignored:\n",paste(missing_survey_context,collapse="\n"))
+		warning("The context does not contain the following surveys, which are thus ignored:",sQuote(missing_survey_context),call.=FALSE)
 	}
 
 	tmp <- intersect(names(surveys),names(context$surveys))
@@ -68,7 +68,7 @@ flunet <- function(intake_survey=NULL, weekly_survey=NULL, contact_survey=NULL, 
 		# check what question are in the data.frame
 		missing_question_context <- setdiff(name_questions_survey,name_questions_survey_context)
 		if(length(missing_question_context)){
-			warning("The context for the ",name_survey," survey does not contain the following questions, which are thus ignored:\n",paste(missing_question_context,collapse="\n"))
+			warning("The context for the ",sQuote(name_survey)," survey does not contain the following questions, which are thus ignored:",sQuote(missing_question_context),call.=FALSE)
 		}
 
 		# keep intersect
@@ -131,11 +131,11 @@ flunet <- function(intake_survey=NULL, weekly_survey=NULL, contact_survey=NULL, 
 				formats <- guess_formats(tmp,orders=context_question$order_date)
 				ind <- which(is.null(formats))
 				if(length(ind)){
-					stop(length(ind)," dates in the question ",name_survey,":",context_question$from_name," are not in the following order: ",context_question$order_date,"\nFor instance:",tmp[ind[1]])
+					stop(length(ind)," dates in the question ",name_survey,":",context_question$from_name," are not in the following order: ",context_question$order_date,"\nFor instance:",tmp[ind[1]],call.=FALSE)
 				}
 				ind <- which(tmp!="")
 				if(length(formats)!=length(ind)){
-					stop("several date formats are not matched for question ",name_survey,":",context_question$from_name," provide additional order_date in context")
+					stop("several date formats are not matched for question ",name_survey,":",context_question$from_name," provide additional order_date in context",call.=FALSE)
 				}
 				
 				# if question name contains "time" then use POSIXct, otherwise use Date.
