@@ -1,11 +1,14 @@
 Package: influenzanet
 Title: Tools for cleaning, combining and analysing data collected by
     Influenzanet
+Description: Tools for cleaning, combining and analysing data collected by
+    Influenzanet
 Version: 0.1
 Authors@R: person(given="Anton", family="Camacho", email="ntncmch@gmail.com",
     role=c("aut","cre"))
-Description: 
 Depends:
     R (>= 3.0.2)
 License: GPL-2
 LazyData: true
+Imports:
+    ggplot2,igraph,jsonlite,lubridate,plyr,stringr

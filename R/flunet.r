@@ -1,10 +1,13 @@
-# constructor for flunet object
-
-
-flunet <- function(intake_survey=NULL, weekly_survey=NULL, contact_survey=NULL, dictionary=NULL){
-
-	library(plyr)
-	library(lubridate)
+#'Constructor for flunet object
+#'
+#'Constructor for flunet object
+#' @param intake_survey data frame
+#' @param  weekly_survey data frame
+#' @param  contact_survey data frame
+#' @param  context list
+#' @export
+#' @import plyr lubridate
+flunet <- function(intake_survey=NULL, weekly_survey=NULL, contact_survey=NULL, context=NULL){
 
 	# check surveys
 	surveys <- list()
@@ -31,74 +34,74 @@ flunet <- function(intake_survey=NULL, weekly_survey=NULL, contact_survey=NULL, 
 		stop("At least one survey must be provided")
 	}
 
-	# check dictionary
-	if(is.null(dictionary)){
-		stop("A dictionary must be provided")
+	# check context
+	if(is.null(context)){
+		stop("A context must be provided")
 	} 
 
-	if(!dictionary_validated(dictionary)){
-		stop("The dictionary is not valid, see documentation")
+	if(!is_context_valid(context)){
+		stop("The context is not valid, see documentation")
 	}
 
-	# select surveys that are both provided and in dico
-	missing_survey_dico <- setdiff(names(surveys),names(dictionary$surveys))
-	if(length(missing_survey_dico)){
-		warning("The dictionary does not contain the following surveys, which are thus ignored:\n",paste(missing_survey_dico,collapse="\n"))
+	# select surveys that are both provided and in context
+	missing_survey_context <- setdiff(names(surveys),names(context$surveys))
+	if(length(missing_survey_context)){
+		warning("The context does not contain the following surveys, which are thus ignored:\n",paste(missing_survey_context,collapse="\n"))
 	}
 
-	tmp <- intersect(names(surveys),names(dictionary$surveys))
+	tmp <- intersect(names(surveys),names(context$surveys))
 	surveys <- surveys[tmp]
 
 	if(!length(surveys)){
-		stop("Surveys are not in the dictionary provided")
+		stop("Surveys are not in the context provided")
 	}
 
 	# for all available surveys
 	for(name_survey in names(surveys)){
 		survey <- surveys[[name_survey]]
-		dico_survey <- dictionary$surveys[[name_survey]]
+		context_survey <- context$surveys[[name_survey]]
 		
 		# questions
 		name_questions_survey  <- names(survey)
-		name_questions_survey_dico  <- get_info_dico(dico_survey,"from_name")
+		name_questions_survey_context  <- get_info_context(context_survey,"from_name")
 
 		# check what question are in the data.frame
-		missing_question_dico <- setdiff(name_questions_survey,name_questions_survey_dico)
-		if(length(missing_question_dico)){
-			warning("The dictionary for the ",name_survey," survey does not contain the following questions, which are thus ignored:\n",paste(missing_question_dico,collapse="\n"))
+		missing_question_context <- setdiff(name_questions_survey,name_questions_survey_context)
+		if(length(missing_question_context)){
+			warning("The context for the ",name_survey," survey does not contain the following questions, which are thus ignored:\n",paste(missing_question_context,collapse="\n"))
 		}
 
 		# keep intersect
-		name_questions_survey <- intersect(name_questions_survey,name_questions_survey_dico)
+		name_questions_survey <- intersect(name_questions_survey,name_questions_survey_context)
 		survey <- survey[name_questions_survey]
 
 		#rename survey
-		rename_questions <- get_info_dico(dico_survey,"to_name")
-		names(dico_survey) <- rename_questions
-		names(rename_questions) <- name_questions_survey_dico
+		rename_questions <- get_info_context(context_survey,"to_name")
+		names(context_survey) <- rename_questions
+		names(rename_questions) <- name_questions_survey_context
 		rename_questions <- rename_questions[name_questions_survey]
 		survey <- rename(survey,replace=rename_questions)
 
 		#for each question
 		for(name_question in names(survey)){
 
-			dico_question <- dico_survey[[name_question]]
+			context_question <- context_survey[[name_question]]
 			#revalue
-			revalue <- all(c("to_values","from_values")%in%names(dico_question))
+			revalue <- all(c("to_values","from_values")%in%names(context_question))
 
 			if(revalue){
 				#revalue vector
-				from <- dico_question$from_values
-				to <- dico_question$to_values
+				from <- context_question$from_values
+				to <- context_question$to_values
 				tmp <- survey[ ,name_question]
 				tmp <- mapvalues(tmp,from=from,to=to)
-				# NA all values not in dico
+				# NA all values not in context
 				tmp[!tmp%in%to] <- NA
 				survey[[name_question]] <- tmp
 			}
 
 			#format
-			if(dico_question$format%in%c("factor","ordered")){
+			if(context_question$format%in%c("factor","ordered")){
 
 				tmp <- survey[[name_question]]
 				if(revalue){
@@ -106,33 +109,33 @@ flunet <- function(intake_survey=NULL, weekly_survey=NULL, contact_survey=NULL, 
 				}else{
 					levels=sort(unique(tmp))
 				}
-				tmp <- factor(tmp,levels=levels,ordered=(dico_question$format=="ordered"))
+				tmp <- factor(tmp,levels=levels,ordered=(context_question$format=="ordered"))
 				survey[[name_question]] <- tmp
 			}
 
-			if(dico_question$format=="character"){
+			if(context_question$format=="character"){
 				survey[[name_question]] <- as.character(survey[[name_question]])
 			}
 
-			if(dico_question$format=="numeric"){
+			if(context_question$format=="numeric"){
 				survey[[name_question]] <- as.numeric(survey[[name_question]])
 			}
 
-			if(dico_question$format=="logical"){
+			if(context_question$format=="logical"){
 				survey[[name_question]] <- as.logical(survey[[name_question]])
 			}
 
-			if(dico_question$format=="date"){
+			if(context_question$format=="date"){
 				#guess format
 				tmp <- 	survey[[name_question]]
-				formats <- guess_formats(tmp,orders=dico_question$order_date)
+				formats <- guess_formats(tmp,orders=context_question$order_date)
 				ind <- which(is.null(formats))
 				if(length(ind)){
-					stop(length(ind)," dates in the question ",name_survey,":",dico_question$from_name," are not in the following order: ",dico_question$order_date,"\nFor instance:",tmp[ind[1]])
+					stop(length(ind)," dates in the question ",name_survey,":",context_question$from_name," are not in the following order: ",context_question$order_date,"\nFor instance:",tmp[ind[1]])
 				}
 				ind <- which(tmp!="")
 				if(length(formats)!=length(ind)){
-					stop("several date formats are not matched for question ",name_survey,":",dico_question$from_name," provide additional order_date in dictionary")
+					stop("several date formats are not matched for question ",name_survey,":",context_question$from_name," provide additional order_date in context")
 				}
 				
 				# if question name contains "time" then use POSIXct, otherwise use Date.
@@ -151,7 +154,7 @@ flunet <- function(intake_survey=NULL, weekly_survey=NULL, contact_survey=NULL, 
 	}
 
 	# create object 
-	structure(list(country=dictionary$country,season=dictionary$season,surveys=surveys,log=list()),class="flunet")
+	structure(list(country=context$country,season=context$season,surveys=surveys,log=list()),class="flunet")
 }
 
 

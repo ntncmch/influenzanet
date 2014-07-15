@@ -8,7 +8,7 @@
 #' This is needed to resolve questions like "did your symptoms developed over a few hours?".
 #' @param keep_bool logical, if \code{TRUE}, all intermediate, logical, variables created by the function are kept.
 #' @export
-#' @importFrom plyr mutate mapvalues
+#' @import plyr
 #' @return a \code{\link{flunet}} object. The weekly survey contains a logical column per symptom definitions.
 #' @note the symptoms definitions for ARI and ILI are taken from the ECDC: \url{http://ecdc.europa.eu/en/activities/surveillance/eisn/surveillance/pages/influenza_case_definitions.aspx}
 summarize_symptoms <- function(x,definitions=c("ARI_ecdc","ILI_ecdc","ILI_fever"),CR_as_TRUE=c("FALSE","TRUE"),keep_bool=c("FALSE","TRUE")){

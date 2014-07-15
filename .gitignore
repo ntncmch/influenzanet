@@ -1,5 +1,8 @@
 misc
+
 .Rapp.history
+
+.Rdata
 
 *.sublime-project
 

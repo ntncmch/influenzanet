@@ -13,6 +13,16 @@ extract_string <- function(v.string,my.split,position,from=c("first","last")){
 	return(res)
 }
 
+
+
+#'char2bool
+#'
+#'char2bool
+#' @param x <what param does>
+#' @param var_names <what param does>
+#' @param CR_as_TRUE <what param does>
+#' @param NA_as_FALSE <what param does>
+#' @import plyr
 char2bool <- function(x,var_names,CR_as_TRUE=FALSE,NA_as_FALSE=FALSE) {
 
 	replace <- c("yes"=TRUE,"no"=FALSE,"CR"=CR_as_TRUE)
@@ -31,7 +41,14 @@ char2bool <- function(x,var_names,CR_as_TRUE=FALSE,NA_as_FALSE=FALSE) {
 
 }
 
-
+#'print helper
+#'
+#'print helper
+#' @param df data frame
+#' @param id character
+#' @import plyr
+#' @name print helper
+#' @aliases df_print_define_same_bout
 df_print_define_same_bout <-function(df,id=NULL){
 
 	if(!is.null(id)){
@@ -48,6 +65,8 @@ df_print_define_same_bout <-function(df,id=NULL){
 
 }
 
+#' @name print helper
+#' @aliases df_print_check
 df_print_check <-function(df,id=NULL){
 
 	if(!is.null(id)){
@@ -64,6 +83,8 @@ df_print_check <-function(df,id=NULL){
 
 }
 
+#' @name print helper
+#' @aliases df_print_check_raw
 df_print_check_raw <-function(df,id=NULL){
 
 	if(!is.null(id)){
@@ -143,6 +164,31 @@ last_na_rm <- function(x) {
 	}
 		
 	return(ans)		
+}
+
+
+
+most_common_na_rm<-function(x){
+
+	if(all(is.na(x))){
+		return(NA)
+	}
+	
+	if(any(grepl("day",levels(x)))){
+		#this is a time factor, take max after excluding "can't remember"
+		xx<-x[x!="CR"]
+		if(all(is.na(xx))){
+			ans<-"CR"
+		}else{
+			tmp<-max(as.numeric(xx),na.rm=T)
+			ans<-levels(x)[tmp]			
+		}
+	}else{
+		#take the most common
+		tmp<-table(x[!is.na(x)])
+		ans<-names(which.max(tmp))
+	}
+	return(ans)
 }
 
 

@@ -56,12 +56,12 @@ count_same_bout <- function(df_weekly,CR_as_TRUE = FALSE, give_position = FALSE,
 #' cluster bouts
 #' 
 #' Cluster different bouts based on closeness of symptom start dates.
+#' @param lag_symptom_start numeric
 #' @inheritParams count_same_bout
 #' @note Temporarily overlapping clusters are grouped. For instance if the sequence temporarily ordered bouts is c(1,2,3,4) with bouts 1 and 4 belonging to the same cluster, then bouts 2 and 3 belong also to this cluster. 
 #' @importFrom igraph graph.edgelist clusters
-#' @importFrom plyr dlply join
+#' @import plyr
 find_bout_cluster <- function(df_weekly, lag_symptom_start = 2) {
-	require(igraph)
 
 	stopifnot(length(unique(df_weekly$person_id))==1,c("n_bout","symptom_start")%in%names(df_weekly))
 
@@ -106,6 +106,7 @@ find_bout_cluster <- function(df_weekly, lag_symptom_start = 2) {
 #'Resolve missing answer to the question "Are you still ill?"
 #' @inheritParams count_same_bout
 #' @inheritParams define_same_bout
+#' @inheritParams clean_weekly_survey
 resolve_missing_still_ill <- function(df_weekly, my_warning="W_same_S_start_diff_bout", delay_in_reporting = 10, debug=FALSE) {
 
 	#still_ill==NA followed by a bout within same cluster
@@ -154,6 +155,7 @@ resolve_missing_still_ill <- function(df_weekly, my_warning="W_same_S_start_diff
 #' @param debug_id character, person_id of participant to debug
 #' @inheritParams clean_weekly_survey
 #' @note This function adds a warning when different bouts are considered to belong to the same episode of illness
+#' @import plyr
 define_same_bout <- function(df_weekly, with_symptom = NULL, lag_symptom_start = 2, delay_in_reporting = 10, CR_as_TRUE = FALSE, my_warning="W_same_S_start_diff_bout",debug=FALSE,debug_id=NULL) {
 
 	#check
@@ -503,17 +505,16 @@ find_suitable_symptom_end <- function(df_weekly, to_match, delay_in_reporting, m
 #'This function peforms several checks, resolves them when possible and otherwise flags informative warnings on corresponding reports.
 #' @param x a \code{flunet} object
 #' @param  with_symptom character, name of symptom (e.g. ARI_ecdc etc). If present, the cleaning is restricted to episodes of illness with
-#' @param  lag_symptom_start  numeric, maximum number of days between two symptom start dates of different reports. Below this threshold, 
-#' reports are considered to belong to the same episode of illness. 
+#' @param  lag_symptom_start  numeric, maximum number of days between two symptom start dates of different reports. Below this threshold, reports are considered to belong to the same episode of illness. 
 #' @param  delay_in_reporting  maximum number of days to report a date of symptom_start and symptom_end.
 #' @param  CR_as_TRUE  logical, CR (can't remember) is replaced by \code{TRUE} when participants are asked whether current illness is the same bout as the one reported the previous time.
 #' @param  plot_check  logical, if \code{TRUE}: plot several checks
 #' @param  debug  logical, if \code{TRUE}: verbose checks
 #' @export
 #' @import ggplot2 
-#' @importFrom lubridate year
-#' @importFrom stringr str_split
-#' @importFrom plyr arrange ddply match_df
+#' @importFrom lubridate year year<- 
+#' @import stringr
+#' @import plyr
 #' @note The option \code{lag_symptom_start} allows us to group reports belonging to the same bout but having different symptom start dates. This happens when participant change their mind from one report to the next.
 #' @return a \code{flunet} object
 clean_weekly_survey <- function(x, with_symptom=NULL, lag_symptom_start = 2, delay_in_reporting = 10, CR_as_TRUE = FALSE, plot_check = FALSE, debug = FALSE) {
@@ -816,7 +817,7 @@ clean_weekly_survey <- function(x, with_symptom=NULL, lag_symptom_start = 2, del
 #' This function merges multiple reports occuring on the same day, due to participant error. This function account for the fact that multiple reports might contain complementary information.
 #' @inheritParams clean_weekly_survey
 #' @export
-#' @importFrom plyr arrange ddply match_df
+#' @import plyr
 resolve_multiple_report_date <- function(x) {
 
 	#checks
