@@ -6,13 +6,13 @@
 char2bool(x, var_names, CR_as_TRUE = FALSE, NA_as_FALSE = FALSE)
 }
 \arguments{
-\item{x}{<what param does>}
+\item{x}{data frame}
 
-\item{var_names}{<what param does>}
+\item{var_names}{variable to be converted}
 
-\item{CR_as_TRUE}{<what param does>}
+\item{NA_as_FALSE}{convert \code{NA} into \code{FALSE}}
 
-\item{NA_as_FALSE}{<what param does>}
+\item{CR_as_TRUE}{logical, if \code{TRUE}, CR (can't remember) is replaced by \code{TRUE} and \code{FALSE} otherwise. This choice is required for the question of whether current illness is the same bout as the one reported the previous time.}
 }
 \description{
 char2bool

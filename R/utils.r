@@ -18,10 +18,10 @@ extract_string <- function(v.string,my.split,position,from=c("first","last")){
 #'char2bool
 #'
 #'char2bool
-#' @param x <what param does>
-#' @param var_names <what param does>
-#' @param CR_as_TRUE <what param does>
-#' @param NA_as_FALSE <what param does>
+#' @param x data frame
+#' @param var_names variable to be converted
+#' @param NA_as_FALSE convert \code{NA} into \code{FALSE}
+#' @inheritParams clean_weekly_survey
 #' @import plyr
 char2bool <- function(x,var_names,CR_as_TRUE=FALSE,NA_as_FALSE=FALSE) {
 
@@ -105,7 +105,7 @@ diff_df <- function(df1, df2) {
 	
 	if(!nrow(df1)){return(df2)}
 	if(!nrow(df2)){return(df1)}
-		
+
 	x<-intersect(names(df1),names(df2))
 	
 	df1$in_df1 <- T
@@ -127,7 +127,7 @@ first_na_rm <- function(x) {
 	}else{
 		ans<-x[1]	
 	}
-		
+
 	return(ans)		
 }
 
@@ -162,7 +162,7 @@ last_na_rm <- function(x) {
 	}else{
 		ans<-x[1]	
 	}
-		
+
 	return(ans)		
 }
 
@@ -190,6 +190,28 @@ most_common_na_rm<-function(x){
 	}
 	return(ans)
 }
+
+
+
+is_survey_present <- function(flunet, survey, warning_message="") {
+
+	if(!inherits(flunet,"flunet")){
+		stop(sQuote("flunet")," argument is not a flunet object")
+	}
+
+	missing_survey <- setdiff(survey,names(flunet$surveys))
+
+	if(length(missing_survey)){
+		warnings(sQuote("flunet")," object doesn't contain ",sQuote(missing_survey)," survey(s) ",warning_message,call.=FALSE)
+		return(FALSE)
+	}
+
+	return(TRUE)
+
+}
+
+
+
 
 
 
