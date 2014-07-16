@@ -3,18 +3,18 @@
 \alias{summarize_symptoms}
 \title{Summarize symptoms}
 \usage{
-summarize_symptoms(x, definitions = c("ARI_ecdc", "ILI_ecdc", "ILI_fever"),
-  CR_as_TRUE = c("FALSE", "TRUE"), keep_bool = c("FALSE", "TRUE"))
+summarize_symptoms(flunet, definitions = c("ARI_ecdc", "ILI_ecdc",
+  "ILI_fever"), CR_as_TRUE = FALSE, keep_bool = FALSE)
 }
 \arguments{
-\item{x}{a \code{\link{flunet}} object}
+\item{flunet}{a \code{\link{flunet}} object}
 
 \item{definitions}{character vector, one or more definitions to summarize symptoms}
 
-\item{CR_as_TRUE}{logical, if \code{TRUE}, answers as "can't remember" are considered as "yes", "no" otherwise.
+\item{CR_as_TRUE}{logical, if \code{TRUE}, answers as "can't remember" are considered as "yes", "no" otherwise. This choice is required for the questions regarding sudden onset of symptom and fever.
 This is needed to resolve questions like "did your symptoms developed over a few hours?".}
 
-\item{keep_bool}{logical, if \code{TRUE}, all intermediate, logical, variables created by the function are kept.}
+\item{keep_bool}{logical, if \code{TRUE}, all intermediate, logical, variables created by the function are kept. That is the variables with CR (can't remember) after transformation accoridng to \code{CR_as_TRUE}}
 }
 \value{
 a \code{\link{flunet}} object. The weekly survey contains a logical column per symptom definitions.
@@ -24,6 +24,8 @@ This function summarizes weekly reported symptoms as acute respiratory infection
 It makes use of the definitions for ARI and ILI provided by the European Center for Disease Control (ECDC).
 }
 \note{
+If the question on sudden onset of fever is not answered (\code{fever_sudden=NA}) but the participant didn't reported fever, then it is set to \code{FALSE}.
+
 the symptoms definitions for ARI and ILI are taken from the ECDC: \url{http://ecdc.europa.eu/en/activities/surveillance/eisn/surveillance/pages/influenza_case_definitions.aspx}
 }
 
