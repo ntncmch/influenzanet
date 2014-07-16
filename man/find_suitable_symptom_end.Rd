@@ -9,13 +9,13 @@ find_suitable_symptom_end(df_weekly, to_match, delay_in_reporting, my_warning,
 \arguments{
 \item{to_match}{\code{data.frame} with two columns: person_id and n_bout (bout number) whose symptom end dates need to be resolved.}
 
-\item{df_weekly}{\link{data.frame} containing weekly survey data}
+\item{df_weekly}{\code{\link{data.frame}} containing weekly survey data}
 
-\item{delay_in_reporting}{maximum number of days to report a date of symptom_start and symptom_end.}
+\item{delay_in_reporting}{maximum number of days to report a date of \code{symptom_start} and \code{symptom_end}. Above this delay, a warning is put on the report.}
 
 \item{my_warning}{character, warning name}
 
-\item{debug}{logical, if \code{TRUE}: verbose checks}
+\item{debug}{logical, if \code{TRUE}, print checks.}
 }
 \description{
 This function try to find a suitable symptom end date when several are available

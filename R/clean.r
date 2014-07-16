@@ -4,15 +4,23 @@
 #' @param give_length logical, if TRUE the length of each bout is returned in the column "length_bout"
 #' @note this function account for multiple report on the same date by grouping them in the same bout.
 #' @inheritParams clean_weekly_survey
-count_same_bout <- function(df_weekly,CR_as_TRUE = FALSE, give_position = FALSE, give_length=FALSE,with_symptom=NULL){
+count_same_bout <- function(df_weekly, CR_as_TRUE = FALSE, give_position = FALSE, give_length=FALSE,subset=NULL){
 
-	stopifnot(length(unique(df_weekly$person_id))==1,is.null(with_symptom) | (!is.null(with_symptom) & with_symptom%in%names(df_weekly) & is.logical(df_weekly[,with_symptom])))
+	if(length(unique(df_weekly$person_id))>1){
+		stop(sQuote("df_weekly")," argument contains more than one person id.",call.=FALSE)
+	}
+
+	# count only episodes for participants who verify subset condition
+	x <- try(subset(df_weekly, eval(parse(text=subset))),silent=TRUE)
+	if(inherits(x,"try-error")){
+		stop("Invalid ",sQuote("subset")," argument. ",x)
+	}
 
 	df_weekly <- arrange(df_weekly,comp_time)
-	df_weekly <- char2bool(df_weekly, "same_bout",CR_as_TRUE=CR_as_TRUE,NA_as_FALSE=TRUE)
+	df_weekly <- char2bool(df_weekly, "same_bout", CR_as_TRUE=CR_as_TRUE, NA_as_FALSE=TRUE)		
 
-	#find first reports but account for multiple report
-	ind <- with(df_weekly,which(!same_bout_bool & !duplicated(report_date)))
+	# find first reports (account for multiple first report)
+	ind <- with(df_weekly, which(!same_bout_bool & !duplicated(report_date)))
 
 	#create variables
 	df_weekly$n_bout <- NA
@@ -23,30 +31,36 @@ count_same_bout <- function(df_weekly,CR_as_TRUE = FALSE, give_position = FALSE,
 		df_weekly$position_bout <- NA		
 	}
 
-
 	#for each bout, start from the first and go down until you find !same_bout
 	i_bout <- 0
+
 	for(i in seq_along(ind)){
-		#find bout boundary
-		x<-ind[i]
-		while((x<nrow(df_weekly)) && (df_weekly$same_bout_bool[x+1] || df_weekly$report_date[x+1]==df_weekly$report_date[x])){
-			x<-x+1
+
+		# find bout boundary
+		bout_start <- ind[i]
+		bout_end <- bout_start
+		while( ( bout_end < nrow(df_weekly) ) && ( df_weekly$same_bout_bool[bout_end+1] || ( df_weekly$report_date[bout_end+1] == df_weekly$report_date[bout_end] ) ) ){
+			bout_end <- bout_end + 1
 		}
 
-		if(is.null(with_symptom) || (!is.null(with_symptom) && any(df_weekly[ind[i]:x,with_symptom],na.rm=T))){
-			i_bout<-i_bout+1
-			df_weekly$n_bout[ind[i]:x]<-i_bout
+		# if no subset or subset if present
+		ind_bout <- bout_start:bout_end
+		if(is.null(subset) || (!is.null(subset) &&  any(eval(parse(text=subset),df_weekly[ind_bout,]),na.rm=TRUE))){
+
+			# increment i_bout
+			i_bout <- i_bout + 1
+			df_weekly$n_bout[ind_bout] <- i_bout
 
 			if(give_length){
 				#account for multiple report_date
-				report_date<-df_weekly$report_date[ind[i]:x]
-				df_weekly$length_bout[ind[i]:x]<-length(unique(report_date))		
+				report_date <- df_weekly$report_date[ind_bout]
+				df_weekly$length_bout[ind_bout] <- length(unique(report_date))		
 			}	
 
 			if(give_position){
 				#account for multiple report_date
-				report_date<-df_weekly$report_date[ind[i]:x]
-				df_weekly$position_bout[ind[i]:x]<-factor(report_date,labels=seq_along(unique(report_date)))		
+				report_date <- df_weekly$report_date[ind_bout]
+				df_weekly$position_bout[ind_bout] <- factor(report_date,labels=seq_along(unique(report_date)))		
 			}	
 		}
 	}
@@ -150,54 +164,39 @@ resolve_missing_still_ill <- function(df_weekly, my_warning="W_same_S_start_diff
 #Define same bouts
 #'
 #'This function identifies reports belonging to the same episode of illness.
-#' @param df_weekly \link{data.frame} containing weekly survey data
+#' @param df_weekly \code{\link{data.frame}} containing weekly survey data
 #' @param my_warning character, warning name
 #' @param debug_id character, person_id of participant to debug
 #' @inheritParams clean_weekly_survey
 #' @note This function adds a warning when different bouts are considered to belong to the same episode of illness
 #' @import plyr
-define_same_bout <- function(df_weekly, with_symptom = NULL, lag_symptom_start = 2, delay_in_reporting = 10, CR_as_TRUE = FALSE, my_warning="W_same_S_start_diff_bout",debug=FALSE,debug_id=NULL) {
+define_same_bout <- function(df_weekly, subset = NULL, lag_symptom_start = 2, delay_in_reporting = 10, CR_as_TRUE = FALSE, my_warning="W_same_S_start_diff_bout",debug=FALSE,debug_id=NULL) {
 
-	#check
-	if(!is.null(with_symptom)){ 
-		
-		if(length(with_symptom)>1){
-			with_symptom <- with_symptom[1]
-			warnings("with_symptom is not length 1, only first value used:",with_symptom)
+	message("Start defining bout, you can have a coffee as it usually takes some time...")
+
+	if(!is.null(subset)){
+		# count only episodes for participants who verify subset condition
+		x <- try(subset(df_weekly, eval(parse(text=subset))),silent=TRUE)
+		if(inherits(x,"try-error")){
+			stop("Invalid ",sQuote("subset")," argument. ",x)
 		}
-
-		if(!with_symptom%in%names(df_weekly)){
-			stop(with_symptom," is not a valid symptom name")
-		}
-
-		if(!is.logical(df_weekly[[with_symptom]])){
-			stop(with_symptom," is not a logical variable")
-		}		
-	}
-
-	cat("Defining bout, you can have a coffee as it usually takes some time...\n")
-	flush.console()
-
-	if(!is.null(with_symptom)){
-		# count only episodes for participants with at least 1 with_symptom
-		tmp <- unique(subset(df_weekly, eval(as.symbol(with_symptom), df_weekly))$person_id)
-		cat(length(tmp)," participants with at least 1 episode with_symptom: ",with_symptom,"\n")
-		flush.console()
+		tmp <- unique(x$person_id)
+		message(length(tmp)," participants verify ",sQuote("subset")," argument.")
 		df_2count <- subset(df_weekly, person_id %in% tmp)
 		df_keep_for_the_end <- subset(df_weekly, !person_id %in% tmp)
-	}else{
+	} else {
 		df_2count <- df_weekly
 		df_keep_for_the_end <- data.frame(NULL)
 	}
 
 	#create n_bout
-	cat("Start counting bout\n")
-	flush.console()
-
+	message("Start counting bout")
 
 	df_weekly <- ddply(df_2count, "person_id", function(df) {
-		df <- count_same_bout(df, CR_as_TRUE, give_position = T, give_length = T, with_symptom = with_symptom)
+
+		df <- count_same_bout(df, CR_as_TRUE, give_position = TRUE, give_length = TRUE, subset = subset)
 		return(df)
+
 	}, .progress = "text")
 
 	df_weekly <- arrange(df_weekly, person_id, comp_time)
@@ -502,14 +501,14 @@ find_suitable_symptom_end <- function(df_weekly, to_match, delay_in_reporting, m
 
 #'Clean weekly survey
 #'
-#'This function peforms several checks, resolves them when possible and otherwise flags informative warnings on corresponding reports.
-#' @param x a \code{flunet} object
-#' @param  with_symptom character, name of symptom (e.g. ARI_ecdc etc). If present, the cleaning is restricted to episodes of illness with
-#' @param  lag_symptom_start  numeric, maximum number of days between two symptom start dates of different reports. Below this threshold, reports are considered to belong to the same episode of illness. 
-#' @param  delay_in_reporting  maximum number of days to report a date of symptom_start and symptom_end.
-#' @param  CR_as_TRUE  logical, CR (can't remember) is replaced by \code{TRUE} when participants are asked whether current illness is the same bout as the one reported the previous time.
-#' @param  plot_check  logical, if \code{TRUE}: plot several checks
-#' @param  debug  logical, if \code{TRUE}: verbose checks
+#'This function peforms several checks, resolves them when possible and otherwise flags informative warnings on the corresponding reports.
+#' @param flunet a \code{\link{flunet}} object
+#' @param subset character, logical expression indicating reports to keep: missing values are taken as false. If present, only episode of illness with at least one report that verify \code{subset} will be processed. This is mainly to save time. E.g. to clean only episodes with at least one ARI report, one can uses \code{subset="ARI_ecdc"}.
+#' @param lag_symptom_start numeric, maximum number of days between two symptom start dates of different reports. Below this threshold, reports are considered to belong to the same episode of illness and are concatenated. 
+#' @param delay_in_reporting maximum number of days to report a date of \code{symptom_start} and \code{symptom_end}. Above this delay, a warning is put on the report.
+#' @param CR_as_TRUE logical, if \code{TRUE}, CR (can't remember) is replaced by \code{TRUE} and \code{FALSE} otherwise. This choice is required for the question of whether current illness is the same bout as the one reported the previous time.
+#' @param plot_check logical, if \code{TRUE}, plot checks.
+#' @param debug logical, if \code{TRUE}, print checks.
 #' @export
 #' @import ggplot2 
 #' @importFrom lubridate year year<- 
@@ -517,32 +516,27 @@ find_suitable_symptom_end <- function(df_weekly, to_match, delay_in_reporting, m
 #' @import plyr
 #' @note The option \code{lag_symptom_start} allows us to group reports belonging to the same bout but having different symptom start dates. This happens when participant change their mind from one report to the next.
 #' @return a \code{flunet} object
-clean_weekly_survey <- function(x, with_symptom=NULL, lag_symptom_start = 2, delay_in_reporting = 10, CR_as_TRUE = FALSE, plot_check = FALSE, debug = FALSE) {
+clean_weekly_survey <- function(flunet, subset=NULL, lag_symptom_start = 2, delay_in_reporting = 10, CR_as_TRUE = FALSE, plot_check = FALSE, debug = FALSE) {
 
- # with_symptom=NULL
+ # subset=NULL
  # lag_symptom_start = 2
  # delay_in_reporting = 10
  # CR_as_TRUE = FALSE
  # plot_check = FALSE
  # debug = FALSE
 
-	#checks
-	if(!inherits(x,"flunet")){
-		stop("x is not a flunet object")
-	}
-
 	stopifnot(is.logical(CR_as_TRUE),is.logical(plot_check),is.logical(debug))
 
-	df_weekly <- x$surveys$weekly
-	if(is.null(df_weekly)){
-		warnings("x doesn't contain weekly survey, no symptoms to summarize")
-		return(x)
-	}
+	if(is_survey_present(flunet,survey="weekly",warning_message="no symptoms to summarize")){
+		df_weekly <- flunet$surveys$weekly
+	} else {
+		return(flunet)
+	}	
 
 	#WARNING LIST
-	W_SSCY <- c("W_S_start_change_year","date of symptom start is wrongly entered due to change of year, e.g. symptom started in december 2012 but reported in january 2013 and wringly entered as december 2013")
-	W_SSTF <- c("W_S_start_too_far","time to report the symptom start date is above delay_in_reporting")
-	W_SETF <- c("W_S_end_too_far","time to report the symptom end date is above delay_in_reporting")
+	W_SSCY <- c("W_S_start_change_year","date of symptom start is not correctly entered due to change of year, e.g. symptom started in december 2012, were reported in january 2013 and entered as december 2013")
+	W_SSTF <- c("W_S_start_too_far","time to report the symptom start date is greater than max delay_in_reporting")
+	W_SETF <- c("W_S_end_too_far","time to report the symptom end date is greater than max delay_in_reporting")
 	W_SSBPR <- c("W_S_start_before_previous_report","symptom start date is before the previous report")
 	W_SEBPR <- c("W_S_end_before_previous_report","symptom end date is before the previous report")
 	W_SSASE <- c("W_S_start_after_S_end","symptom start date is after the symptom end date")
@@ -555,13 +549,12 @@ clean_weekly_survey <- function(x, with_symptom=NULL, lag_symptom_start = 2, del
 
 	df_warnings <- as.data.frame(rbind(W_SSCY = W_SSCY, W_SSTF = W_SSTF, W_SETF = W_SETF, W_SSBPR= W_SSBPR, W_SEBPR= W_SEBPR, W_SSASE= W_SSASE, W_SSW = W_SSW, W_SEW = W_SEW, W_SBBDSS = W_SBBDSS, W_SBBDSE = W_SBBDSE, W_SSSBDB = W_SSSBDB, W_MISC = W_MISC),stringsAsFactors=F)
 	names(df_warnings) <- c("name","description")
-	df_weekly[, df_warnings$name] <- FALSE
-
+	df_weekly[df_warnings$name] <- FALSE
 
 	######################################################################################################################################################
 	#											check: symptom_start is wrong due to new year \n
 	######################################################################################################################################################
-	new_year <- as.numeric(unlist(str_split(x$season,"/"))[1])+1
+	new_year <- as.numeric(unlist(str_split(flunet$season,"/"))[1])+1
 	min_report <- as.Date(paste0(new_year,"-01-01"))
 	max_report <- as.Date(paste0(new_year,"-01-31"))
 	min_symptom <- as.Date(paste0(new_year,"-12-01"))
@@ -573,27 +566,19 @@ clean_weekly_survey <- function(x, with_symptom=NULL, lag_symptom_start = 2, del
 
 	if(length(ind)){
 		year(df_weekly$symptom_start[ind]) <- new_year - 1
-		df_weekly[ind, my_warning] <- T		
+		df_weekly[ind, my_warning] <- TRUE		
 	}
 
 	######################################################################################################################################################
 	#											check: define same_bout \n
 	######################################################################################################################################################
 
-	df_weekly <- char2bool(df_weekly, "same_bout", CR_as_TRUE,NA_as_FALSE=TRUE)
-
-	#select only individuals with at least one ARI_ecdc==T	
-	tmp <- subset(df_weekly, ARI_ecdc)
-	df_2count <- subset(df_weekly, person_id %in% tmp$person_id)
-	df_keep <- subset(df_weekly, !person_id %in% tmp$person_id)
 
 	my_warning <- df_warnings["W_SSSBDB","name"]
-	df_counted <- define_same_bout(df_2count, with_symptom = with_symptom, lag_symptom_start = lag_symptom_start, delay_in_reporting = delay_in_reporting, CR_as_TRUE = CR_as_TRUE, my_warning = my_warning, debug = debug, debug_id = NULL)
+	
+	df_weekly <- define_same_bout(df_weekly, subset = subset, lag_symptom_start = lag_symptom_start, delay_in_reporting = delay_in_reporting, CR_as_TRUE = CR_as_TRUE, my_warning = my_warning, debug = debug, debug_id = NULL)
 
-
-	df_weekly <- rbind.fill(df_counted, df_keep)
 	df_weekly <- arrange(df_weekly, person_id, comp_time)
-
 
 	#define past episodes
 	df_weekly <- transform(df_weekly, W_past_episode_full = (length_bout %in% c(1) & !is.na(symptom_start) & !is.na(symptom_end) & symptom_start <= symptom_end & symptom_start < report_date & symptom_end < report_date & still_ill %in% c(F)))
@@ -803,12 +788,12 @@ clean_weekly_survey <- function(x, with_symptom=NULL, lag_symptom_start = 2, del
 	tmp <- mutate(tmp,name=as.character(name))
 	df_warnings <- join(df_warnings,tmp,by='name')
 
-	x$log$clean_weekly_survey <- list("lag_symptom_start"=lag_symptom_start,"delay_in_reporting"=delay_in_reporting,"CR_as_TRUE"=CR_as_TRUE,"warnings"=df_warnings)
+	flunet$log$clean_weekly_survey <- list("lag_symptom_start"=lag_symptom_start,"delay_in_reporting"=delay_in_reporting,"CR_as_TRUE"=CR_as_TRUE,"warnings"=df_warnings)
 
 	#return
-	x$surveys$weekly <- df_weekly
+	flunet$surveys$weekly <- df_weekly
 
-	return(x)
+	return(flunet)
 }
 
 
@@ -818,17 +803,17 @@ clean_weekly_survey <- function(x, with_symptom=NULL, lag_symptom_start = 2, del
 #' @inheritParams clean_weekly_survey
 #' @export
 #' @import plyr
-resolve_multiple_report_date <- function(x) {
+resolve_multiple_report_date <- function(flunet) {
 
 	#checks
-	if(!inherits(x,"flunet")){
-		stop("x is not a flunet object")
+	if(!inherits(flunet,"flunet")){
+		stop("flunet is not a flunet object")
 	}
 
-	df_weekly <- x$surveys$weekly
+	df_weekly <- flunet$surveys$weekly
 	if(is.null(df_weekly)){
-		warnings("x doesn't contain weekly survey, no symptoms to summarize")
-		return(x)
+		warnings("flunet doesn't contain weekly survey, no symptoms to summarize")
+		return(flunet)
 	}
 
 
@@ -912,9 +897,9 @@ resolve_multiple_report_date <- function(x) {
 		df_weekly$S_start_after_S_end[ind]<-T		
 	}
 
-	x$surveys$weekly <- df_weekly
+	flunet$surveys$weekly <- df_weekly
 
-	return(x)
+	return(flunet)
 }
 
 

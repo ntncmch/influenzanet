@@ -11,9 +11,9 @@ resolve_missing_still_ill(df_weekly, my_warning = "W_same_S_start_diff_bout",
 
 \item{my_warning}{character, warning name}
 
-\item{delay_in_reporting}{maximum number of days to report a date of symptom_start and symptom_end.}
+\item{delay_in_reporting}{maximum number of days to report a date of \code{symptom_start} and \code{symptom_end}. Above this delay, a warning is put on the report.}
 
-\item{debug}{logical, if \code{TRUE}: verbose checks}
+\item{debug}{logical, if \code{TRUE}, print checks.}
 }
 \description{
 Resolve missing answer to the question "Are you still ill?"

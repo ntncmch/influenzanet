@@ -3,10 +3,10 @@
 \alias{resolve_multiple_report_date}
 \title{Merge multiple reports on the same date}
 \usage{
-resolve_multiple_report_date(x)
+resolve_multiple_report_date(flunet)
 }
 \arguments{
-\item{x}{a \code{flunet} object}
+\item{flunet}{a \code{\link{flunet}} object}
 }
 \description{
 This function merges multiple reports occuring on the same day, due to participant error. This function account for the fact that multiple reports might contain complementary information.

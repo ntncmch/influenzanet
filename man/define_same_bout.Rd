@@ -3,26 +3,26 @@
 \alias{define_same_bout}
 \title{This function identifies reports belonging to the same episode of illness.}
 \usage{
-define_same_bout(df_weekly, with_symptom = NULL, lag_symptom_start = 2,
+define_same_bout(df_weekly, subset = NULL, lag_symptom_start = 2,
   delay_in_reporting = 10, CR_as_TRUE = FALSE,
   my_warning = "W_same_S_start_diff_bout", debug = FALSE, debug_id = NULL)
 }
 \arguments{
-\item{df_weekly}{\link{data.frame} containing weekly survey data}
+\item{df_weekly}{\code{\link{data.frame}} containing weekly survey data}
 
 \item{my_warning}{character, warning name}
 
 \item{debug_id}{character, person_id of participant to debug}
 
-\item{with_symptom}{character, name of symptom (e.g. ARI_ecdc etc). If present, the cleaning is restricted to episodes of illness with}
+\item{subset}{character, logical expression indicating reports to keep: missing values are taken as false. If present, only episode of illness with at least one report that verify \code{subset} will be processed. This is mainly to save time. E.g. to clean only episodes with at least one ARI report, one can uses \code{subset="ARI_ecdc"}.}
 
-\item{lag_symptom_start}{numeric, maximum number of days between two symptom start dates of different reports. Below this threshold, reports are considered to belong to the same episode of illness.}
+\item{lag_symptom_start}{numeric, maximum number of days between two symptom start dates of different reports. Below this threshold, reports are considered to belong to the same episode of illness and are concatenated.}
 
-\item{delay_in_reporting}{maximum number of days to report a date of symptom_start and symptom_end.}
+\item{delay_in_reporting}{maximum number of days to report a date of \code{symptom_start} and \code{symptom_end}. Above this delay, a warning is put on the report.}
 
-\item{CR_as_TRUE}{logical, CR (can't remember) is replaced by \code{TRUE} when participants are asked whether current illness is the same bout as the one reported the previous time.}
+\item{CR_as_TRUE}{logical, if \code{TRUE}, CR (can't remember) is replaced by \code{TRUE} and \code{FALSE} otherwise. This choice is required for the question of whether current illness is the same bout as the one reported the previous time.}
 
-\item{debug}{logical, if \code{TRUE}: verbose checks}
+\item{debug}{logical, if \code{TRUE}, print checks.}
 }
 \description{
 This function identifies reports belonging to the same episode of illness.
