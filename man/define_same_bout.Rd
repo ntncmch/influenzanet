@@ -5,7 +5,8 @@
 \usage{
 define_same_bout(df_weekly, subset = NULL, lag_symptom_start = 2,
   delay_in_reporting = 10, CR_as_TRUE = FALSE,
-  my_warning = "W_same_S_start_diff_bout", debug = FALSE, debug_id = NULL)
+  my_warning = "W_same_S_start_diff_bout", debug = FALSE, debug_id = NULL,
+  n_cores = NULL)
 }
 \arguments{
 \item{df_weekly}{\code{\link{data.frame}} containing weekly survey data}

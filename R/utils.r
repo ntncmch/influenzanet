@@ -1,20 +1,3 @@
-extract_string <- function(v.string,my.split,position,from=c("first","last")){
-	
-	from <- match.arg(from)
-
-	res<-sapply(v.string,function(x){
-		tmp<-strsplit(as.character(x),split=my.split,fixed=T)[[1]]
-		if(from=="last"){
-			position=length(tmp)-position+1
-		}
-		return(tmp[position])
-	})
-
-	return(res)
-}
-
-
-
 #'char2bool
 #'
 #'char2bool
@@ -99,23 +82,6 @@ df_print_check_raw <-function(df,id=NULL){
 		cat("########################\n")
 	})
 
-}
-
-diff_df <- function(df1, df2) {
-	
-	if(!nrow(df1)){return(df2)}
-	if(!nrow(df2)){return(df1)}
-
-	x<-intersect(names(df1),names(df2))
-	
-	df1$in_df1 <- T
-	df2$in_df2 <- T
-
-	res <- merge(df1, df2, all = T)
-
-	res_diff <- subset(res, is.na(in_df1) | is.na(in_df2),select=x)
-	
-	return(res_diff)
 }
 
 first_na_rm <- function(x) {

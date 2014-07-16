@@ -169,8 +169,16 @@ resolve_missing_still_ill <- function(df_weekly, my_warning="W_same_S_start_diff
 #' @param debug_id character, person_id of participant to debug
 #' @inheritParams clean_weekly_survey
 #' @note This function adds a warning when different bouts are considered to belong to the same episode of illness
-#' @import plyr
-define_same_bout <- function(df_weekly, subset = NULL, lag_symptom_start = 2, delay_in_reporting = 10, CR_as_TRUE = FALSE, my_warning="W_same_S_start_diff_bout",debug=FALSE,debug_id=NULL) {
+#' @import plyr parallel doParallel dplyr myRtoolbox
+define_same_bout <- function(df_weekly, subset = NULL, lag_symptom_start = 2, delay_in_reporting = 10, CR_as_TRUE = FALSE, my_warning="W_same_S_start_diff_bout",debug=FALSE, debug_id=NULL , n_cores=NULL) {
+
+	if(is.null(n_cores)){
+		n_cores <- round(detectCores()/2)
+	}
+
+	if(n_cores > 1){
+		registerDoParallel(cores=n_cores)
+	}
 
 	message("Start defining bout, you can have a coffee as it usually takes some time...")
 
@@ -197,87 +205,87 @@ define_same_bout <- function(df_weekly, subset = NULL, lag_symptom_start = 2, de
 		df <- count_same_bout(df, CR_as_TRUE, give_position = TRUE, give_length = TRUE, subset = subset)
 		return(df)
 
-	}, .progress = "text")
+	}, .progress = ifelse(n_cores > 1,"none","text"), .parallel=(n_cores > 1))
 
 	df_weekly <- arrange(df_weekly, person_id, comp_time)
 
 	## everything below is cleaning
 
-	#only those with more than one bout with non NA symptom_start 
-	tmp <- subset(df_weekly, !is.na(n_bout) & !is.na(symptom_start))
-	tmp2 <- unique(tmp[, c("person_id", "n_bout")])
-	tmp3 <- subset(count(tmp2, vars = "person_id"), freq > 1)
-	tmp <- match_df(df_weekly, tmp3, on = c("person_id"))
-	tmp <- subset(tmp, !is.na(n_bout))
+	# select only participants with more than one bout with non NA symptom_start 
+	# in order to test whether they are clusterized
+	df_weekly_test_cluster <- df_weekly %>% 
+	filter(!is.na(n_bout) & !is.na(symptom_start)) %>% 
+	select(person_id, n_bout) %>% 
+	unique() %>% 
+	count(vars = "person_id") %>% 
+	filter(freq>1) %>% 
+	match_df(df_weekly, ., on = c("person_id")) %>% 
+	filter(!is.na(n_bout))
 
 	if(!is.null(debug_id)){
 		print(subset(tmp, person_id%in%debug_id))
 	}
 
 	############################################################################
-	#Define bout clusters
+	# Define bout clusters
 	############################################################################
 
-	cat("Define bout clusters\n")
-	flush.console()
+	message("Define bout clusters\n")
 
+	df_weekly_cluster <- ddply(df_weekly_test_cluster, "person_id", find_bout_cluster, lag_symptom_start = lag_symptom_start, .progress = ifelse(n_cores > 1,"none","text"), .parallel=(n_cores > 1))
 
-	tmp2 <- ddply(tmp, "person_id", find_bout_cluster, lag_symptom_start = lag_symptom_start, .progress = "text")
-
-	tmp <- subset(tmp2, !is.na(bout_cluster))
+	df_weekly_cluster <- filter(df_weekly_cluster, !is.na(bout_cluster))
 
 	if(!is.null(debug_id)){
 		print(subset(tmp, person_id%in%debug_id))
 	}
 
-	#count number of different n_bout for a given person_id and bout_cluster
-	tmp2 <- unique(tmp[, c("person_id", "bout_cluster", "n_bout")])
-	tmp3 <- subset(count(tmp2, vars = c("person_id", "bout_cluster")), freq > 1)
-	tmp <- match_df(tmp, tmp3, on = c("person_id", "bout_cluster"))
+	# count number of different n_bout for a given person_id and bout_cluster
+	df_weekly_same_cluster <- df_weekly_cluster %>% 
+	select(person_id,bout_cluster,n_bout) %>% 
+	unique() %>% count(vars = c("person_id", "bout_cluster")) %>% 
+	filter(freq>1) %>% 
+	match_df(df_weekly_cluster, ., on = c("person_id", "bout_cluster"))
 
 	############################################################################
 	#Select subset to clean
 	############################################################################
 
-	cat("Select subset to clean\n")
-	flush.console()
+	message("Select subset to clean")
 
-	df_2clean <- ddply(tmp, c("person_id", "bout_cluster"), function(df) {
+	df_2clean <- ddply(df_weekly_same_cluster, c("person_id", "bout_cluster"), function(df) {
 
-		my_person_id<-unique(df$person_id)
-		min_report_date<-min(df$report_date)
-		max_report_date<-max(df$report_date)
+		my_person_id <- unique(df$person_id)
+		min_report_date <- min(df$report_date)
+		max_report_date <- max(df$report_date)
 
 		return(subset(df_weekly, person_id == my_person_id & report_date >= min_report_date  & report_date <= max_report_date))
-	}, .progress = "text")
+	}, .progress = ifelse(n_cores > 1,"none","text"), .parallel=(n_cores > 1))
 
 
 	df_keep <- diff_df(df_weekly, df_2clean)
 
-	df_2clean <- ddply(df_2clean, c("person_id", "bout_cluster"), function(df) {
-		df$next_n_bout <- c(df$n_bout[-1], NA)
-		return(df)
-	})
+	df_2clean <- df_2clean %>% group_by(person_id,bout_cluster) %>% mutate(next_n_bout=c(n_bout[-1], NA))
 
 	if(!is.null(debug_id)){
 		df_print_define_same_bout(df_2clean, debug_id)		
 	}
 
 	############################################################################
-	#Solve interrupted bout due non response to the question: Are you still ill?
+	# Solve interrupted bout due non response to the question: Are you still ill?
 	############################################################################
+	
+	df_2clean_still_ill <- df_2clean %>% filter(is.na(still_ill)) %>% select(person_id,bout_cluster) %>% unique()
 
-	tmp <- df_2clean[is.na(df_2clean$still_ill), c("person_id", "bout_cluster")]
+	message("Check ",nrow(df_2clean_still_ill)," interrupted bout(s) due to non response to the question \"Are you still ill?\"")
 
-	cat("Check",nrow(unique(tmp)),"interrupted bout due non response to the question \"Are you still ill?\"\n")
-	flush.console()
+	df_2clean_still_ill <- match_df(df_2clean, df_2clean_still_ill,on=c("person_id", "bout_cluster"))
+	
+	df_keep_still_ill <- diff_df(df_2clean, df_2clean_still_ill)
 
-	df_2clean1 <- match_df(df_2clean, tmp,on=c("person_id", "bout_cluster"))
-	df_keep1 <- diff_df(df_2clean, df_2clean1)
-
-	df_clean1 <- ddply(df_2clean1, c("person_id", "bout_cluster"), resolve_missing_still_ill, my_warning=my_warning,delay_in_reporting=delay_in_reporting , debug=debug,.progress = "text")
-
-	df_2clean <- rbind(df_keep1, df_clean1)
+	df_2clean_still_ill <- ddply(df_2clean_still_ill, c("person_id", "bout_cluster"), resolve_missing_still_ill, my_warning=my_warning,delay_in_reporting=delay_in_reporting , debug=debug)
+	
+	df_2clean <- rbind(df_keep_still_ill, df_2clean_still_ill)
 
 	if(!is.null(debug_id)){
 		df_print_define_same_bout(df_2clean, debug_id)		
@@ -287,39 +295,40 @@ define_same_bout <- function(df_weekly, subset = NULL, lag_symptom_start = 2, de
 	#Solve cases who changed their mind and extended their bout
 	############################################################################
 
-	tmp <- subset(df_2clean, !still_ill & !is.na(n_bout) & !is.na(next_n_bout) & (n_bout != next_n_bout), select = c("person_id", "bout_cluster"))
+	df_2clean_extended_bout <- df_2clean %>% filter(!still_ill & !is.na(n_bout) & !is.na(next_n_bout) & (n_bout != next_n_bout)) %>% select(person_id,bout_cluster) %>% unique
 
-	cat("Check",nrow(unique(tmp)),"cases who changed their mind and extended their bout\n")
-	flush.console()
+	message("Check ",nrow(df_2clean_extended_bout)," cases who changed their mind and extended their bout")
 
-	df_2clean2 <- match_df(df_2clean, tmp,on=c("person_id", "bout_cluster"))
-	df_keep2 <- diff_df(df_2clean, df_2clean2)
+	df_2clean_extended_bout <- match_df(df_2clean, df_2clean_extended_bout,on=c("person_id", "bout_cluster"))
+	df_keep_extended_bout <- diff_df(df_2clean, df_2clean_extended_bout)
 
-	df_clean2 <- ddply(df_2clean2, c("person_id", "bout_cluster"), function(df) {
+	df_2clean_extended_bout <- ddply(df_2clean_extended_bout, c("person_id", "bout_cluster"), function(df) {
 
+		# if changed their mind and difference between report dates is below max delay => solve it as same bout
 		i_test <- with(df, which(!still_ill & !is.na(n_bout) & !is.na(next_n_bout) & (n_bout != next_n_bout) & c(diff(report_date), 0) <= delay_in_reporting))
+		
 		if (length(i_test) != 0) {
 			df$still_ill[i_test] <- TRUE
 			df$same_bout[i_test + 1] <- "yes"
 			df[c(i_test, i_test + 1), my_warning] <- TRUE
 		} else if (debug) {
-			cat("The following were not edited, check if all good please\n\n")
+			message("The following were not edited, check if all good please")
 			df_print_define_same_bout(df)
-
 		}
 		return(df)
 	}, .progress = "text")
 
-	df_2clean <- rbind(df_keep2, df_clean2)
+	df_2clean <- rbind(df_keep_extended_bout, df_2clean_extended_bout)
 
 	if(!is.null(debug_id)){
 		df_print_define_same_bout(df_2clean, debug_id)		
 	}
 
 	############################################################################
-	#Solve interrupted bout due non or wrong response to the question: Is it the same bout as in previous report?
+	#Solve interrupted bout due missing or wrong response to the question: Is it the same bout as in previous report?
 	############################################################################
 
+	# HERE
 	tmp <- subset(df_2clean, still_ill & !is.na(n_bout) & !is.na(next_n_bout) & (n_bout != next_n_bout), select = c("person_id", "bout_cluster"))
 
 	cat("Check",nrow(unique(tmp)),"interrupted bout due non or wrong response to the question \"Is it the same bout as in previous report?\"\n")
