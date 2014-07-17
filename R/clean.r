@@ -907,7 +907,7 @@ resolve_multiple_report_date <- function(flunet, n_cores=1) {
 	var_char <- setdiff(names(df_weekly),c(var_always_first,var_bool,var_date))
 
 	#clean multiple person_id,report_date entries
-	system.time(df_clean <- ddply(df_2clean, c("person_id", "report_date"), function(df) {
+	df_clean <- ddply(df_2clean, c("person_id", "report_date"), function(df) {
 
 		# first, arrange by compilation time (required to solve always_first)
 		df <- arrange(df, comp_time)
@@ -942,18 +942,18 @@ resolve_multiple_report_date <- function(flunet, n_cores=1) {
 
 		return(df)
 
-	}, .progress = ifelse(n_cores > 1,"none","text"), .parallel=(n_cores > 1)))
+	}, .progress = ifelse(n_cores > 1,"none","text"), .parallel=(n_cores > 1))
 
 	#
 	df_weekly <- rbind(df_keep, df_clean)
-	df_weekly<-arrange(df_weekly,person_id,report_date)
+	df_weekly <- arrange(df_weekly,person_id,report_date)
 
-	#TODO: remove this when previous TODO is done
 	#check for people with symptom_start > symptom_end
 	ind <- with(df_weekly,which(symptom_start > symptom_end & !is.na(n_bout) & !W_S_start_after_S_end))
 	if(length(ind)){
+		message("resolving multiple episodes led to ",length(ind)," new reports with symptom_start > symptom_end, which will be flagged.")
 		print(df_weekly[ind,])
-		df_weekly$S_start_after_S_end[ind]<-T		
+		df_weekly$S_start_after_S_end[ind] <- TRUE		
 	}
 
 	flunet$surveys$weekly <- df_weekly

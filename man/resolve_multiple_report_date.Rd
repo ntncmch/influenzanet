@@ -3,10 +3,12 @@
 \alias{resolve_multiple_report_date}
 \title{Merge multiple reports on the same date}
 \usage{
-resolve_multiple_report_date(flunet)
+resolve_multiple_report_date(flunet, n_cores = 1)
 }
 \arguments{
 \item{flunet}{a \code{\link{flunet}} object}
+
+\item{n_cores}{number of cores for parallelisation. By default no parallelisation (\code{n.cores=1}). If \code{NULL}, set to half the value returned by \code{\link[parallel]{detectCores}}.}
 }
 \description{
 This function merges multiple reports occuring on the same day, due to participant error. This function account for the fact that multiple reports might contain complementary information.
