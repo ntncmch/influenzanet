@@ -5,7 +5,7 @@
 \usage{
 clean_weekly_survey(flunet, subset = NULL, lag_symptom_start = 2,
   delay_in_reporting = 10, CR_as_TRUE = FALSE, plot_check = FALSE,
-  debug = FALSE)
+  n_cores = 1, debug = FALSE)
 }
 \arguments{
 \item{flunet}{a \code{\link{flunet}} object}
@@ -19,6 +19,8 @@ clean_weekly_survey(flunet, subset = NULL, lag_symptom_start = 2,
 \item{CR_as_TRUE}{logical, if \code{TRUE}, CR (can't remember) is replaced by \code{TRUE} and \code{FALSE} otherwise. This choice is required for the question of whether current illness is the same bout as the one reported the previous time.}
 
 \item{plot_check}{logical, if \code{TRUE}, plot checks.}
+
+\item{n_cores}{number of cores for parallelisation. By default no parallelisation (\code{n.cores=1}). If \code{NULL}, set to half the value returned by \code{\link[parallel]{detectCores}}.}
 
 \item{debug}{logical, if \code{TRUE}, print checks.}
 }

@@ -6,7 +6,7 @@
 define_same_bout(df_weekly, subset = NULL, lag_symptom_start = 2,
   delay_in_reporting = 10, CR_as_TRUE = FALSE,
   my_warning = "W_same_S_start_diff_bout", debug = FALSE, debug_id = NULL,
-  n_cores = NULL)
+  n_cores = 1)
 }
 \arguments{
 \item{df_weekly}{\code{\link{data.frame}} containing weekly survey data}
@@ -24,6 +24,8 @@ define_same_bout(df_weekly, subset = NULL, lag_symptom_start = 2,
 \item{CR_as_TRUE}{logical, if \code{TRUE}, CR (can't remember) is replaced by \code{TRUE} and \code{FALSE} otherwise. This choice is required for the question of whether current illness is the same bout as the one reported the previous time.}
 
 \item{debug}{logical, if \code{TRUE}, print checks.}
+
+\item{n_cores}{number of cores for parallelisation. By default no parallelisation (\code{n.cores=1}). If \code{NULL}, set to half the value returned by \code{\link[parallel]{detectCores}}.}
 }
 \description{
 This function identifies reports belonging to the same episode of illness.

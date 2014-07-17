@@ -4,7 +4,7 @@
 \title{Find suitable symptom end date}
 \usage{
 find_suitable_symptom_end(df_weekly, to_match, delay_in_reporting, my_warning,
-  debug = FALSE)
+  debug = FALSE, n_cores = 1)
 }
 \arguments{
 \item{to_match}{\code{data.frame} with two columns: person_id and n_bout (bout number) whose symptom end dates need to be resolved.}
@@ -16,6 +16,8 @@ find_suitable_symptom_end(df_weekly, to_match, delay_in_reporting, my_warning,
 \item{my_warning}{character, warning name}
 
 \item{debug}{logical, if \code{TRUE}, print checks.}
+
+\item{n_cores}{number of cores for parallelisation. By default no parallelisation (\code{n.cores=1}). If \code{NULL}, set to half the value returned by \code{\link[parallel]{detectCores}}.}
 }
 \description{
 This function try to find a suitable symptom end date when several are available

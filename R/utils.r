@@ -42,7 +42,7 @@ df_print_define_same_bout <-function(df,id=NULL){
 	}
 
 	d_ply(df,c("person_id","bout_cluster"),function(x){
-		print(x[c("person_id","report_date","health_score","same_bout","still_ill","n_bout","bout_cluster","symptom_start","symptom_end","ARI_ecdc","ILI_ecdc","ILI_fever")])
+		print(x[c("person_id","report_date","health_score","same_bout","still_ill","n_bout","next_n_bout","bout_cluster","symptom_start","symptom_end","ARI_ecdc","ILI_ecdc","ILI_fever")])
 		cat("########################\n")
 	})
 
@@ -98,23 +98,26 @@ first_na_rm <- function(x) {
 }
 
 # perform logical operation "any" after NA's removing
-# @param x.true a vector containing the values of x that should be considered as TRUE. The other values are considered as FALSE. The function returns the first value of x.true found in x.
-any_na_rm <- function(x,x.true=NULL){
+# @param x_true a vector containing the values of x that should be considered as TRUE. The other values are considered as FALSE. The function returns the first value of x_true found in x.
+any_na_rm <- function(x, x_true=NULL){
 	
-	if(!is.null(x.true)){
+# TODO: this function should be split in two as the part with x_true doesn't return TRUE/FALSE but the first value found in x_true.
+
+	if(!is.null(x_true)){
 		
-		for(x.val in x.true){
-			if(x.val%in%x){
-				return(x.val)
+		# is there any of these "TRUE" values? if so return the first one	
+		for(x_val in x_true){
+			if(x_val %in% x){
+				return(x_val)
 			}
 		}
 		
-		#return one of the remaining values
+		# if not, return the most common one among the "FALSE" one
 		return(most_common_na_rm(x))
 	}
 	
-	#x must be logical
-	return(any(x, na.rm = T))
+	# x must be logical
+	return(any(x, na.rm = TRUE))
 	
 }
 
@@ -124,9 +127,9 @@ last_na_rm <- function(x) {
 	ind <- which(!is.na(x))
 
 	if (length(ind)) {
-		ans<-x[max(ind)]
+		ans <- x[max(ind)]
 	}else{
-		ans<-x[1]	
+		ans <- x[1]	
 	}
 
 	return(ans)		
@@ -142,17 +145,17 @@ most_common_na_rm<-function(x){
 	
 	if(any(grepl("day",levels(x)))){
 		#this is a time factor, take max after excluding "can't remember"
-		xx<-x[x!="CR"]
+		xx <- x[x!="CR"]
 		if(all(is.na(xx))){
-			ans<-"CR"
+			ans <- "CR"
 		}else{
-			tmp<-max(as.numeric(xx),na.rm=T)
-			ans<-levels(x)[tmp]			
+			tmp <- max(as.numeric(xx),na.rm=T)
+			ans <- levels(x)[tmp]			
 		}
 	}else{
 		#take the most common
-		tmp<-table(x[!is.na(x)])
-		ans<-names(which.max(tmp))
+		tmp <- table(x[!is.na(x)])
+		ans <- names(which.max(tmp))
 	}
 	return(ans)
 }
