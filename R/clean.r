@@ -961,5 +961,103 @@ resolve_multiple_report_date <- function(flunet, n_cores=1) {
 	return(flunet)
 }
 
+#' Resolve multiple profile entries for Flusurvey participants. Rename variables and cast values in R format.
+#' @param df_profile a \link{data.frame} containing FluSurvey participants profiles.
+#' @param age_group_cut a numeric vector containing the start and end points of the age groups.
+#' @param age_group_name a character vector containing the labels for the age groups.
+#' @return a \link{data.frame}.
+#' @export
+#' @importFrom plyr arrange ddply rename
+#'
+clean_profile<-function(df_profile,age_group_cut=c(0,18,45,65,Inf),age_group_name=c("0-17", "18-44", "45-64", "65+")){
+
+	if(!is.null(age_group_name)){
+		stopifnot(length(age_group_name)==(length(age_group_cut)-1))		
+	}
+
+	#num to factor
+	levels_gender<-0:1
+	labels_gender<-c("male", "female")
+	df_profile <-transform_factor(df_profile,"gender", levels= levels_gender,labels= labels_gender)
+
+	levels_employment<-0:8
+	labels_employment<-c("paid_full_time", "paid_part_time","self","student","home","none","long_term_leave","retired","other")
+	df_profile <-transform_factor(df_profile,variable="employed",new_variable="employment", levels= levels_employment,labels= labels_employment)
+
+	levels_activity<-0:5
+	labels_activity<-c("professional", "office","service","skilled_manual","other_manual","other")
+	df_profile <-transform_factor(df_profile,variable="activity",new_variable="occupation", levels= levels_activity,labels= labels_activity)
+
+	levels_smoke<-0:4
+	labels_smoke<-c("no", "occasionally","<10_per_day",">10_per_day","unknown")
+	df_profile <-transform_factor(df_profile,variable="smoke", levels= levels_smoke,labels= labels_smoke)
 
 
+	#char to logical
+	levels_logical<-c("False","True")
+	labels_logical<-c(FALSE,TRUE)
+	var_logical<-c("asthma","diabetes","respiratoryother","heart","kidney","immuno")
+	df_profile<-transform_factor(df_profile, var_logical,levels= levels_logical,labels= labels_logical,logical=T)
+
+	#num to logical
+	levels_vacc<-0:1
+	labels_vacc<-c(TRUE,FALSE)
+	exclude_vacc<-c(NA,2,3)
+	df_profile<-transform_factor(df_profile,"vaccinelast","vaccine_last",levels= levels_vacc,labels= labels_vacc,exclude=exclude_vacc,logical=T)
+	df_profile<-transform_factor(df_profile,"vaccine",levels= levels_vacc,labels= labels_vacc,exclude=exclude_vacc,logical=T)
+	df_profile<-transform_factor(df_profile,"pregnant",levels= levels_vacc,labels= labels_vacc,exclude=exclude_vacc,logical=T)
+
+
+	df_profile <- transform(df_profile, age_group = cut(age,breaks = age_group_cut, labels=as.factor(age_group_name),include=T,right=F), is_risk = (asthma | diabetes | respiratoryother | heart | kidney | immuno ), region=factor(region),register_date=as.Date(registerdate, format = "%Y-%m-%d"),comp_time = as.POSIXlt(Compilation.Date))
+
+	df_profile <- rename(df_profile,c(Person = "person_id"))
+
+
+	#order by date of compilation
+	df_profile<-arrange(df_profile,comp_time)
+
+	#select interesting variable and reduce
+	df_profile <- unique(subset(df_profile, select = c("person_id","register_date","gender","age_group", "is_risk","pregnant","smoke", "vaccine","region","employment","occupation")))
+
+	#how many duplicates?
+	x <- table(df_profile[, c("person_id")])
+	tmp <- sum(x > 1)/sum(x > 0) * 100
+	print(paste(round(tmp, 2), "% of person_id have more than one profile"))
+	flush.console()
+
+	id_mult<-names(x)[x>1]
+	df_mult<-subset(df_profile,person_id%in%id_mult)
+	df_uni<-subset(df_profile,!person_id%in%id_mult)
+
+	tmp<-sapply(df_mult,function(x) all(is.logical(x)))
+	var_bool<-names(tmp[tmp])
+	var_not_bool<-names(tmp[!tmp])
+
+
+	#force 1 profile per person_id: multiple profiles arise when profile is updated by user
+	df_resolve_mult <- ddply(df_mult, "person_id", function(df) {
+
+		#solve logical duplicate
+		for(var in var_bool){
+			df[, var]<- any_na_rm(df[, var])
+		}		
+
+		#solve non-logical
+		for(var in var_not_bool){
+			df[, var]<-last_na_rm(df[, var])
+		}
+
+		df <- unique(df)
+
+		if (nrow(df) > 1) {
+			print(df)
+		}
+
+		return(df)
+
+	}, .progress = "text")
+
+	df_profile_unique<-rbind(df_uni, df_resolve_mult)
+
+	return(df_profile_unique)
+}

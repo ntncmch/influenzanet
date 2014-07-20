@@ -56,3 +56,65 @@ summarize_symptoms <- function(flunet,definitions=c("ARI_ecdc","ILI_ecdc","ILI_f
 
 	return(flunet)
 }
+
+
+#'Summarize underlying health conditions
+#'
+#'This function summarizes the underlying health conditions of every participant according to \code{definitions}
+#' @param flunet a \code{\link{flunet}} object
+#' @param definitions character vector, one or more definitions to summarize underlying health conditions. See note below.
+#' @note \code{any_UHC} stands for any underlying health conditions.
+#' @export
+summarize_UHC <- function(flunet, definitions=c("any_UHC")) {
+
+	definitions <- match.arg(definitions,several.ok=TRUE)
+
+	if(is_survey_present(flunet,survey="intake",warning_message="no underlying health conditions to summarize")){
+		df_intake <- flunet$surveys$intake
+	} else {
+		return(flunet)
+	}
+
+	# summarize symptoms
+	for(def in definitions){
+
+		def_2_parse <- switch(def,
+			"any_UHC"="(asthma | diabetes | other_respiratory | heart | kidney | immuno )"
+			)
+
+		df_intake[[def]] <- with(df_intake,eval(parse(text=def_2_parse)))
+	}
+
+	flunet$surveys$intake <- df_intake
+
+	return(flunet)
+}
+
+#'Summarize age
+#'
+#'This function summarizes the age of every participant with age groups. It's mainly a wrapper aroud \code{\link[base]{cut}}.
+#' @inheritParams summarize_symptoms
+#' @inheritParams base::cut
+#' @export
+#' @import plyr
+#' @examples \dontrun{
+#' flunet <- summarize_age(flunet, breaks=c(0,18,45,65,Inf), labels=c("0-17", "18-44", "45-64", "65+"))
+#'}
+summarize_age <- function(flunet, breaks, labels = NULL, include.lowest = TRUE, right = FALSE, ordered_result = TRUE, ...) {
+
+	if(is_survey_present(flunet,survey="intake",warning_message="no age to summarize")){
+		df_intake <- flunet$surveys$intake
+	} else {
+		return(flunet)
+	}
+
+	df_intake <- mutate(df_intake, age_group = cut(age, breaks = breaks, labels=labels, include.lowest=include.lowest, right=right, ordered_result=ordered_result, ...))
+
+	flunet$surveys$intake <- df_intake
+
+	return(flunet)
+}
+
+
+
+
