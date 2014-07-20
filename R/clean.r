@@ -961,90 +961,59 @@ resolve_multiple_report_date <- function(flunet, n_cores=1) {
 	return(flunet)
 }
 
-#' Resolve multiple profile entries for Flusurvey participants. Rename variables and cast values in R format.
-#' @param df_profile a \link{data.frame} containing FluSurvey participants profiles.
-#' @param age_group_cut a numeric vector containing the start and end points of the age groups.
-#' @param age_group_name a character vector containing the labels for the age groups.
-#' @return a \link{data.frame}.
-#' @export
-#' @importFrom plyr arrange ddply rename
+#'Resolve multiple profiles
 #'
-clean_profile<-function(df_profile,age_group_cut=c(0,18,45,65,Inf),age_group_name=c("0-17", "18-44", "45-64", "65+")){
+#'Multiple profiles arise when participants update their profile during the season. This function forces only one profile per participant by summarizing logical variables with \code{\link[base]{any}} and non-logical value with \code{\link[dplyr]{last}}. See note below for more details.
+#' @inheritParams clean_weekly_survey
+#' @note \itemize{
+#' 	\item For logical variables, \code{\link[base]{any}} is evaluated with \code{na.rm=TRUE}. If all values are \code{NA}, \code{NA} is returned.
+#' 	\item For non-logical variables, \code{\link[dplyr]{last}} is evaluated after \code{\link[stats]{na.omit}}. If all values are \code{NA}, \code{NA} is returned.
+#' }
+#' @export
+#' @import dplyr
+resolve_multiple_profiles <- function(flunet){
 
-	if(!is.null(age_group_name)){
-		stopifnot(length(age_group_name)==(length(age_group_cut)-1))		
+	if(is_survey_present(flunet,survey="intake",warning_message="nothing to resolve")){
+		df_intake <- flunet$surveys$intake
+	} else {
+		return(flunet)
 	}
 
-	#num to factor
-	levels_gender<-0:1
-	labels_gender<-c("male", "female")
-	df_profile <-transform_factor(df_profile,"gender", levels= levels_gender,labels= labels_gender)
-
-	levels_employment<-0:8
-	labels_employment<-c("paid_full_time", "paid_part_time","self","student","home","none","long_term_leave","retired","other")
-	df_profile <-transform_factor(df_profile,variable="employed",new_variable="employment", levels= levels_employment,labels= labels_employment)
-
-	levels_activity<-0:5
-	labels_activity<-c("professional", "office","service","skilled_manual","other_manual","other")
-	df_profile <-transform_factor(df_profile,variable="activity",new_variable="occupation", levels= levels_activity,labels= labels_activity)
-
-	levels_smoke<-0:4
-	labels_smoke<-c("no", "occasionally","<10_per_day",">10_per_day","unknown")
-	df_profile <-transform_factor(df_profile,variable="smoke", levels= levels_smoke,labels= labels_smoke)
-
-
-	#char to logical
-	levels_logical<-c("False","True")
-	labels_logical<-c(FALSE,TRUE)
-	var_logical<-c("asthma","diabetes","respiratoryother","heart","kidney","immuno")
-	df_profile<-transform_factor(df_profile, var_logical,levels= levels_logical,labels= labels_logical,logical=T)
-
-	#num to logical
-	levels_vacc<-0:1
-	labels_vacc<-c(TRUE,FALSE)
-	exclude_vacc<-c(NA,2,3)
-	df_profile<-transform_factor(df_profile,"vaccinelast","vaccine_last",levels= levels_vacc,labels= labels_vacc,exclude=exclude_vacc,logical=T)
-	df_profile<-transform_factor(df_profile,"vaccine",levels= levels_vacc,labels= labels_vacc,exclude=exclude_vacc,logical=T)
-	df_profile<-transform_factor(df_profile,"pregnant",levels= levels_vacc,labels= labels_vacc,exclude=exclude_vacc,logical=T)
-
-
-	df_profile <- transform(df_profile, age_group = cut(age,breaks = age_group_cut, labels=as.factor(age_group_name),include=T,right=F), is_risk = (asthma | diabetes | respiratoryother | heart | kidney | immuno ), region=factor(region),register_date=as.Date(registerdate, format = "%Y-%m-%d"),comp_time = as.POSIXlt(Compilation.Date))
-
-	df_profile <- rename(df_profile,c(Person = "person_id"))
-
-
 	#order by date of compilation
-	df_profile<-arrange(df_profile,comp_time)
-
-	#select interesting variable and reduce
-	df_profile <- unique(subset(df_profile, select = c("person_id","register_date","gender","age_group", "is_risk","pregnant","smoke", "vaccine","region","employment","occupation")))
+	df_intake <- arrange(df_intake,comp_time)
 
 	#how many duplicates?
-	x <- table(df_profile[, c("person_id")])
-	tmp <- sum(x > 1)/sum(x > 0) * 100
-	print(paste(round(tmp, 2), "% of person_id have more than one profile"))
-	flush.console()
+	#count how many entries have the same report_date
+	tmp <- count(df_intake, vars=c("person_id"))
+	prop <- sum(tmp$freq > 1)/nrow(tmp) * 100
 
-	id_mult<-names(x)[x>1]
-	df_mult<-subset(df_profile,person_id%in%id_mult)
-	df_uni<-subset(df_profile,!person_id%in%id_mult)
+	message(round(prop, 2), "% of the participants have more than one profile")
 
-	tmp<-sapply(df_mult,function(x) all(is.logical(x)))
-	var_bool<-names(tmp[tmp])
-	var_not_bool<-names(tmp[!tmp])
+	df_2clean <- match_df(df_intake, subset(tmp,freq>1), on=c("person_id"))	
+	df_keep <- match_df(df_intake, subset(tmp,freq==1), on=c("person_id"))
 
+	# find logical variables
+	tmp <- sapply(df_2clean,function(x) all(is.logical(x)))
+	var_bool <- names(tmp[tmp])
+	var_not_bool <- names(tmp[!tmp])
 
-	#force 1 profile per person_id: multiple profiles arise when profile is updated by user
-	df_resolve_mult <- ddply(df_mult, "person_id", function(df) {
+	#force 1 profile per person_id: multiple intakes arise when it is updated by user
+	df_clean <- ddply(df_2clean, "person_id", function(df) {
 
 		#solve logical duplicate
 		for(var in var_bool){
-			df[, var]<- any_na_rm(df[, var])
+			x <- df[[var]]
+			df[[var]] <- any(x,na.rm=!all(is.na(x)))
 		}		
 
 		#solve non-logical
 		for(var in var_not_bool){
-			df[, var]<-last_na_rm(df[, var])
+			x <- df[[var]]
+			if(all(is.na(x))){
+				x <- x[1]
+			} else {
+				df[[var]] <- last(na.omit(x))	
+			}
 		}
 
 		df <- unique(df)
@@ -1057,7 +1026,11 @@ clean_profile<-function(df_profile,age_group_cut=c(0,18,45,65,Inf),age_group_nam
 
 	}, .progress = "text")
 
-	df_profile_unique<-rbind(df_uni, df_resolve_mult)
+	df_intake <- rbind(df_keep, df_clean)
 
-	return(df_profile_unique)
+	df_intake <- arrange(df_intake,comp_time)
+
+	flunet$surveys$intake <- df_intake
+
+	return(flunet)
 }

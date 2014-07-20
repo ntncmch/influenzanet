@@ -122,21 +122,6 @@ any_na_rm <- function(x, x_true=NULL){
 }
 
 
-last_na_rm <- function(x) {
-	
-	ind <- which(!is.na(x))
-
-	if (length(ind)) {
-		ans <- x[max(ind)]
-	}else{
-		ans <- x[1]	
-	}
-
-	return(ans)		
-}
-
-
-
 most_common_na_rm<-function(x){
 
 	if(all(is.na(x))){

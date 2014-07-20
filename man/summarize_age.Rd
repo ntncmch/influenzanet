@@ -30,7 +30,7 @@ summarize_age(flunet, breaks, labels = NULL, include.lowest = TRUE,
 \item{...}{further arguments passed to or from other methods.}
 }
 \description{
-This function summarizes the age of every participant by making age froups
+This function summarizes the age of every participant with age groups. It's mainly a wrapper aroud \code{\link[base]{cut}}.
 }
 \examples{
 \dontrun{
