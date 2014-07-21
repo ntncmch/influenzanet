@@ -115,7 +115,7 @@ find_bout_cluster <- function(df_weekly, lag_symptom_start = 2) {
 		i_cluster <- as.numeric(factor(i_cluster, levels = unique(i_cluster), labels = seq_along(unique(i_cluster))))			
 	}
 	#bind them
-	bout_cluster <- unique(data.frame(n_bout = names(s_start)[i_bout], bout_cluster = i_cluster, stringsAsFactors = F))
+	bout_cluster <- unique(data.frame(n_bout = names(s_start)[i_bout], bout_cluster = i_cluster, stringsAsFactors = FALSE))
 
 	#join to orginal df_weekly
 	return(join(df_weekly, bout_cluster, by = "n_bout"))
@@ -369,12 +369,17 @@ define_same_bout <- function(df_weekly, subset = NULL, lag_symptom_start = 2, de
 
 			for (i in i_test) {
 
-				s_start_next <- first_na_rm(subset(df, n_bout == n_bout[i + 1])$symptom_start)
+				s_start <- subset(df, n_bout == n_bout[i + 1])$symptom_start
+				if(all(is.na(s_start))){
+					s_start_next <- s_start[1]
+				} else {
+					s_start_next <- first(na.omit(s_start))
+				}
 				# to be merged, symptom start of next bout must be before previous report date
 				# otherwise, it might be a new bout
 				if (!is.na(s_start_next) && df$report_date[i] >= s_start_next) {
 					df$same_bout[i + 1] <- "yes"
-					df[c(i, i + 1), my_warning] <- T
+					df[c(i, i + 1), my_warning] <- TRUE
 				} else if (debug) {
 					message("The following was not edited (case 1), check if all good please\n")
 					df_print_define_same_bout(df)
@@ -606,7 +611,7 @@ clean_weekly_survey <- function(flunet, subset=NULL, lag_symptom_start = 2, dela
 	W_SSSBDB <- c("W_same_S_start_diff_bout","several episodes have a symptom start date within lag_symptom_start")
 	W_MISC <- c("W_misc","miscellaneous warnings such as unrealistic values, i.e. health-score < 0 or > 100")
 
-	df_warnings <- as.data.frame(rbind(W_SSCY = W_SSCY, W_SSTF = W_SSTF, W_SETF = W_SETF, W_SSBPR= W_SSBPR, W_SEBPR= W_SEBPR, W_SSASE= W_SSASE, W_SSW = W_SSW, W_SEW = W_SEW, W_SBBDSS = W_SBBDSS, W_SBBDSE = W_SBBDSE, W_SSSBDB = W_SSSBDB, W_MISC = W_MISC),stringsAsFactors=F)
+	df_warnings <- as.data.frame(rbind(W_SSCY = W_SSCY, W_SSTF = W_SSTF, W_SETF = W_SETF, W_SSBPR= W_SSBPR, W_SEBPR= W_SEBPR, W_SSASE= W_SSASE, W_SSW = W_SSW, W_SEW = W_SEW, W_SBBDSS = W_SBBDSS, W_SBBDSE = W_SBBDSE, W_SSSBDB = W_SSSBDB, W_MISC = W_MISC),stringsAsFactors=FALSE)
 	names(df_warnings) <- c("name","description")
 	df_weekly[df_warnings$name] <- FALSE
 
@@ -640,7 +645,7 @@ clean_weekly_survey <- function(flunet, subset=NULL, lag_symptom_start = 2, dela
 	df_weekly <- arrange(df_weekly, person_id, comp_time)
 
 	#define past episodes
-	df_weekly <- transform(df_weekly, W_past_episode_full = (length_bout %in% c(1) & !is.na(symptom_start) & !is.na(symptom_end) & symptom_start <= symptom_end & symptom_start < report_date & symptom_end < report_date & still_ill %in% c(F)))
+	df_weekly <- transform(df_weekly, W_past_episode_full = (length_bout %in% c(1) & !is.na(symptom_start) & !is.na(symptom_end) & symptom_start <= symptom_end & symptom_start < report_date & symptom_end < report_date & still_ill %in% c(FALSE)))
 
 
 	######################################################################################################################################################

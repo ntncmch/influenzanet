@@ -58,6 +58,44 @@ summarize_symptoms <- function(flunet,definitions=c("ARI_ecdc","ILI_ecdc","ILI_f
 }
 
 
+
+#'Summarize symptom severity
+#'
+#'This function summarizes symptom severity by taking the highest symptom as ordered in \code{severity}.
+#' @param  severity character vector, symptoms ordered by increasing severity. Each symptoms must correspond to a logical variable in the weekly survey.
+#' @inheritParams summarize_symptoms
+#' @export
+#' @import plyr 
+#' @seealso \code{\link{summarize_symptoms}}
+#' @return a \code{\link{flunet}} object with an additional - ordered - variable \code{symptom_severity} in the weekly survey.
+summarize_severity <- function(flunet, severity=c("ARI_ecdc","ILI_ecdc","ILI_fever")) {
+
+	if(is_survey_present(flunet,survey="weekly",warning_message="severity won't be summarized")){
+		df_weekly <- flunet$surveys$weekly
+	} else {
+		return(flunet)
+	}
+
+	# write info on the log
+	flunet$log$summarize_severity <- list("severity"=severity)
+
+	# keep only reports with symptoms in severity
+	any_severity <- paste(severity,collapse=" | ")	
+	df_summarize <- subset(df_weekly,eval(parse(text=any_severity)))
+	df_keep <- subset(df_weekly,!eval(parse(text=any_severity)) | is.na(eval(parse(text=any_severity))))
+
+	severity_ordered <- ordered(severity)
+
+	df_summarize$symptom_severity <- ordered(apply(df_summarize[severity],1,function(x) {max(severity_ordered[as.logical(x)])}))
+	
+	df_weekly <- rbind.fill(df_summarize,df_keep)
+
+	flunet$surveys$weekly <- df_weekly
+
+	return(flunet)
+}
+
+
 #'Summarize underlying health conditions
 #'
 #'This function summarizes the underlying health conditions of every participant according to \code{definitions}
@@ -74,6 +112,9 @@ summarize_UHC <- function(flunet, definitions=c("any_UHC")) {
 	} else {
 		return(flunet)
 	}
+
+	# write info on the log
+	flunet$log$summarize_UHC <- list("definitions"=definitions)
 
 	# summarize symptoms
 	for(def in definitions){
@@ -107,8 +148,11 @@ summarize_age <- function(flunet, breaks, labels = NULL, include.lowest = TRUE, 
 	} else {
 		return(flunet)
 	}
-
+	
 	df_intake <- mutate(df_intake, age_group = cut(age, breaks = breaks, labels=labels, include.lowest=include.lowest, right=right, ordered_result=ordered_result, ...))
+
+	# write info on the log
+	flunet$log$summarize_age <- list("breaks"=breaks,"labels"=attributes(df_intake$age_group)$levels)
 
 	flunet$surveys$intake <- df_intake
 

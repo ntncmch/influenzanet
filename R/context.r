@@ -585,7 +585,7 @@ create_context_flusurvey_201213 <- function() {
 	names(context$surveys$weekly) <- NULL
 	names(context$surveys$contact) <- NULL
 
-	context_json <- toJSON(context,pretty=T)
+	context_json <- toJSON(context,pretty=TRUE)
 
 	return(list(context_R=context,context_JSON=context_json))
 }

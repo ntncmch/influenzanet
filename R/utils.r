@@ -84,19 +84,6 @@ df_print_check_raw <-function(df,id=NULL){
 
 }
 
-first_na_rm <- function(x) {
-	
-	ind <- which(!is.na(x))
-
-	if (length(ind)) {
-		ans<-x[ind[1]]
-	}else{
-		ans<-x[1]	
-	}
-
-	return(ans)		
-}
-
 # perform logical operation "any" after NA's removing
 # @param x_true a vector containing the values of x that should be considered as TRUE. The other values are considered as FALSE. The function returns the first value of x_true found in x.
 any_na_rm <- function(x, x_true=NULL){
@@ -134,7 +121,7 @@ most_common_na_rm<-function(x){
 		if(all(is.na(xx))){
 			ans <- "CR"
 		}else{
-			tmp <- max(as.numeric(xx),na.rm=T)
+			tmp <- max(as.numeric(xx),na.rm=TRUE)
 			ans <- levels(x)[tmp]			
 		}
 	}else{
