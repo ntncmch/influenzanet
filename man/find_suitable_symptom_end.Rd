@@ -3,21 +3,16 @@
 \alias{find_suitable_symptom_end}
 \title{Find suitable symptom end date}
 \usage{
-find_suitable_symptom_end(df_weekly, to_match, delay_in_reporting, my_warning,
-  debug = FALSE, n_cores = 1)
+find_suitable_symptom_end(df, delay_in_reporting, my_warning, debug = FALSE)
 }
 \arguments{
-\item{to_match}{\code{data.frame} with two columns: person_id and n_bout (bout number) whose symptom end dates need to be resolved.}
-
-\item{df_weekly}{\code{\link{data.frame}} containing weekly survey data}
+\item{df}{\code{data.frame}. Weekly survey of a single participant, containing all the reports of a given episode.}
 
 \item{delay_in_reporting}{maximum number of days to report a date of \code{symptom_start} and \code{symptom_end}. Above this delay, a warning is put on the report.}
 
 \item{my_warning}{character, warning name}
 
 \item{debug}{logical, if \code{TRUE}, print checks.}
-
-\item{n_cores}{number of cores for parallelisation. By default no parallelisation (\code{n.cores=1}). If \code{NULL}, set to half the value returned by \code{\link[parallel]{detectCores}}.}
 }
 \description{
 This function try to find a suitable symptom end date when several are available

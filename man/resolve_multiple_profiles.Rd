@@ -9,12 +9,12 @@ resolve_multiple_profiles(flunet)
 \item{flunet}{a \code{\link{flunet}} object}
 }
 \description{
-Multiple profiles arise when participants update their profile during the season. This function forces only one profile per participant by summarizing logical variables with \code{\link[base]{any}} and non-logical value with \code{\link[dplyr]{last}}. See note below for more details.
+Multiple profiles arise when participants update their profile during the season. This function forces only one profile per participant by summarizing logical variables with \code{\link[myRtoolbox]{any_na}} and non-logical value with \code{\link[myRtoolbox]{last_na}}. See note below for more details.
 }
 \note{
 \itemize{
-	\item For logical variables, \code{\link[base]{any}} is evaluated with \code{na.rm=TRUE}. If all values are \code{NA}, \code{NA} is returned.
-	\item For non-logical variables, \code{\link[dplyr]{last}} is evaluated after \code{\link[stats]{na.omit}}. If all values are \code{NA}, \code{NA} is returned.
+	\item For logical variables, the logical OR is evaluated over non \code{NA} values. If all values are \code{NA}, then \code{NA} is returned.
+	\item For non-logical variables, the last non \code{NA} value is returned. If all values are \code{NA}, then \code{NA} is returned.
 }
 }
 

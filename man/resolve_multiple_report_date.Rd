@@ -3,14 +3,19 @@
 \alias{resolve_multiple_report_date}
 \title{Merge multiple reports on the same date}
 \usage{
-resolve_multiple_report_date(flunet, n_cores = 1)
+resolve_multiple_report_date(flunet)
 }
 \arguments{
 \item{flunet}{a \code{\link{flunet}} object}
-
-\item{n_cores}{number of cores for parallelisation. By default no parallelisation (\code{n.cores=1}). If \code{NULL}, set to half the value returned by \code{\link[parallel]{detectCores}}.}
 }
 \description{
 This function merges multiple reports occuring on the same day, due to participant error. This function account for the fact that multiple reports might contain complementary information.
+}
+\note{
+\itemize{
+	\item For logical variables, the logical OR is evaluated over non \code{NA} values. If all values are \code{NA}, then \code{NA} is returned.
+	\item For non-logical variables, the last non \code{NA} value is returned. If all values are \code{NA}, then \code{NA} is returned.
+ \item There is also the possibility to always take the first value entered if relevant.
+}
 }
 

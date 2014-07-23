@@ -3,11 +3,11 @@
 \alias{find_suitable_symptom_start}
 \title{Find suitable symptom start date}
 \usage{
-find_suitable_symptom_start(df_weekly, to_match, delay_in_reporting, my_warning,
-  debug = FALSE, n_cores = 1)
+find_suitable_symptom_start(df, df_weekly, delay_in_reporting, my_warning,
+  debug = FALSE)
 }
 \arguments{
-\item{to_match}{\code{data.frame} with two columns: person_id and n_bout (bout number) whose symptom start dates need to be resolved.}
+\item{df}{\code{data.frame}. Weekly survey of a single participant, containing all the reports of a given episode.}
 
 \item{df_weekly}{\code{\link{data.frame}} containing weekly survey data}
 
@@ -16,8 +16,6 @@ find_suitable_symptom_start(df_weekly, to_match, delay_in_reporting, my_warning,
 \item{my_warning}{character, warning name}
 
 \item{debug}{logical, if \code{TRUE}, print checks.}
-
-\item{n_cores}{number of cores for parallelisation. By default no parallelisation (\code{n.cores=1}). If \code{NULL}, set to half the value returned by \code{\link[parallel]{detectCores}}.}
 }
 \description{
 This function try to find a suitable symptom start date when several are available
