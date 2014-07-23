@@ -4,6 +4,8 @@
 #' @param give_length logical, if TRUE the length of each bout is returned in the column "length_bout"
 #' @note this function account for multiple report on the same date by grouping them in the same bout.
 #' @inheritParams clean_weekly_survey
+#' @export
+#' @import dplyr 
 count_same_bout <- function(df_weekly, CR_as_TRUE = FALSE, give_position = FALSE, give_length=FALSE,subset=NULL){
 
 	if(length(unique(df_weekly$person_id))>1){
@@ -11,13 +13,12 @@ count_same_bout <- function(df_weekly, CR_as_TRUE = FALSE, give_position = FALSE
 	}
 
 	# count only episodes for participants who verify subset condition
-	x <- try(subset(df_weekly, eval(parse(text=subset))),silent=TRUE)
+	x <- try(dplyr::filter(df_weekly, eval(parse(text=subset),df_weekly)),silent=TRUE)
 	if(inherits(x,"try-error")){
 		stop("Invalid ",sQuote("subset")," argument. ",x)
 	}
 
-	df_weekly <- arrange(df_weekly,comp_time)
-	df_weekly <- char2bool(df_weekly, "same_bout", CR_as_TRUE=CR_as_TRUE, NA_as_FALSE=TRUE)		
+	df_weekly <- dplyr::arrange(df_weekly,comp_time) %>% char2bool("same_bout", CR_as_TRUE=CR_as_TRUE, NA_as_FALSE=TRUE)		
 
 	# find first reports (account for multiple first report)
 	ind <- with(df_weekly, which(!same_bout_bool & !duplicated(report_date)))
@@ -93,6 +94,8 @@ find_bout_cluster <- function(df_weekly, lag_symptom_start = 2) {
 		if(length(tmp)>1){names(tmp) <- seq_along(tmp)}
 		return(tmp)
 	}))
+
+
 	names(s_start) <- extract_string(names(s_start),".",1,"first")
 
 	#compute matrix of time lags
@@ -170,6 +173,60 @@ resolve_missing_still_ill <- function(df_weekly, my_warning="W_same_S_start_diff
 	return(df_weekly)
 }
 
+clean_extended_bout <- function(df, delay_in_reporting, my_warning, debug) {
+
+
+	df <- dplyr::arrange(df,comp_time)
+
+	# message(unique(df$person_id))
+	# if changed their mind and difference between report dates is below max delay => solve it as same bout
+	i_test <- with(df, which(!still_ill & !is.na(n_bout) & !is.na(next_n_bout) & (n_bout != next_n_bout) & c(diff(report_date), 0) <= delay_in_reporting))
+
+	if (length(i_test) != 0) {
+		df$still_ill[i_test] <- TRUE
+		df$same_bout[i_test + 1] <- "yes"
+		df[c(i_test, i_test + 1), my_warning] <- TRUE
+	} else if (debug) {
+		message("The following were not edited, check if all good please")
+		df_print_define_same_bout(df)
+	}
+	return(df)
+}
+
+clean_same_bout <- function(df, delay_in_reporting, my_warning, debug) {
+
+	df <- dplyr::arrange(df,comp_time)
+
+	i_test <- with(df, which(still_ill & !is.na(n_bout) & !is.na(next_n_bout) & (n_bout != next_n_bout) & c(diff(report_date), 0) <= delay_in_reporting))
+	if (length(i_test) != 0) {
+
+		for (i in i_test) {
+
+			s_start <- filter(df, n_bout == n_bout[i + 1])$symptom_start
+			if(all(is.na(s_start))){
+				s_start_next <- s_start[1]
+			} else {
+				s_start_next <- first(na.omit(s_start))
+			}
+				# to be merged, symptom start of next bout must be before previous report date
+				# otherwise, it might be a new bout
+			if (!is.na(s_start_next) && df$report_date[i] >= s_start_next) {
+				df$same_bout[i + 1] <- "yes"
+				df[c(i, i + 1), my_warning] <- TRUE
+			} else if (debug) {
+				message("The following was not edited (case 1), check if all good please")
+				df_print_define_same_bout(df)
+			}
+
+		}
+	} else if (debug) {
+		message("The following was not edited (case 2), check if all good please")
+		df_print_define_same_bout(df)
+	}
+
+	return(df)
+}
+
 #Define same bouts
 #'
 #'This function identifies reports belonging to the same episode of illness.
@@ -189,7 +246,7 @@ define_same_bout <- function(df_weekly, subset = NULL, lag_symptom_start = 2, de
 		CR_as_TRUE <- FALSE
 		my_warning <- "W_same_S_start_diff_bout"
 		debug <- FALSE
-		debug_id <- "025a4c26-d286-4b28-8eca-ad6ca2bd8bc4" 
+		debug_id <- "0941a0d9-c6ff-407b-a340-4432a7f32dca"
 		n_cores <- NULL
 	}
 
@@ -205,14 +262,14 @@ define_same_bout <- function(df_weekly, subset = NULL, lag_symptom_start = 2, de
 
 	if(!is.null(subset)){
 		# count only episodes for participants who verify subset condition
-		x <- try(subset(df_weekly, eval(parse(text=subset))),silent=TRUE)
-		if(inherits(x,"try-error")){
-			stop("Invalid ",sQuote("subset")," argument. ",x)
+		select_person_id <- try(filter(df_weekly, eval(parse(text=subset),df_weekly)) %>% select(person_id) %>% unique,silent=TRUE)
+		if(inherits(select_person_id,"try-error")){
+			stop("Invalid ",sQuote("subset")," argument. ",select_person_id)
 		}
-		tmp <- unique(x$person_id)
-		message(length(tmp)," participants verify ",sQuote("subset")," argument.")
-		df_2count <- subset(df_weekly, person_id %in% tmp)
-		df_keep_for_the_end <- subset(df_weekly, !person_id %in% tmp)
+		message(nrow(select_person_id)," participants verify ",sQuote("subset")," argument.")
+		df_2count <- semi_join(df_weekly, select_person_id, by="person_id")
+		df_keep_for_the_end <- anti_join(df_weekly, df_2count, by=names(df_weekly))
+
 	} else {
 		df_2count <- df_weekly
 		df_keep_for_the_end <- data.frame(NULL)
@@ -228,23 +285,23 @@ define_same_bout <- function(df_weekly, subset = NULL, lag_symptom_start = 2, de
 
 	}, .progress = ifelse(n_cores > 1,"none","text"), .parallel=(n_cores > 1))
 
-	df_weekly <- arrange(df_weekly, person_id, comp_time)
+	df_weekly <- dplyr::arrange(df_weekly, person_id, comp_time)
 
 	## everything below is cleaning
 
 	# select only participants with more than one bout with non NA symptom_start 
 	# in order to test whether they are clusterized
 	df_weekly_test_cluster <- df_weekly %>% 
-	filter(!is.na(n_bout) & !is.na(symptom_start)) %>% 
-	select(person_id, n_bout) %>% 
-	unique() %>% 
-	count(vars = "person_id") %>% 
-	filter(freq>1) %>% 
-	match_df(df_weekly, ., on = c("person_id")) %>% 
-	filter(!is.na(n_bout))
+	dplyr::filter(!is.na(n_bout) & !is.na(symptom_start)) %>%
+	dplyr::group_by(person_id) %>%
+	dplyr::summarize(n=length(unique(n_bout))) %>% 
+	dplyr::filter(n>1) %>% 
+	dplyr::semi_join(df_weekly, ., by = "person_id") %>% 
+	dplyr::filter(!is.na(n_bout))
+
 
 	if(!is.null(debug_id)){
-		print(subset(df_weekly_test_cluster, person_id%in%debug_id))
+		print(filter(df_weekly_test_cluster, person_id%in%debug_id))
 	}
 
 	############################################################################
@@ -258,15 +315,15 @@ define_same_bout <- function(df_weekly, subset = NULL, lag_symptom_start = 2, de
 	df_weekly_cluster <- filter(df_weekly_cluster, !is.na(bout_cluster))
 
 	if(!is.null(debug_id)){
-		print(subset(df_weekly_cluster, person_id%in%debug_id))
+		print(filter(df_weekly_cluster, person_id%in%debug_id))
 	}
 
 	# count number of different n_bout for a given person_id and bout_cluster
 	df_weekly_same_cluster <- df_weekly_cluster %>% 
-	select(person_id,bout_cluster,n_bout) %>% 
-	unique() %>% count(vars = c("person_id", "bout_cluster")) %>% 
-	filter(freq>1) %>% 
-	match_df(df_weekly_cluster, ., on = c("person_id", "bout_cluster"))
+	dplyr::group_by(person_id,bout_cluster) %>% 
+	dplyr::summarize(n = length(unique(n_bout))) %>% 
+	dplyr::filter(n > 1) %>% 
+	dplyr::semi_join(df_weekly_cluster, ., by = c("person_id", "bout_cluster"))
 
 	############################################################################
 	#Select subset to clean
@@ -280,17 +337,12 @@ define_same_bout <- function(df_weekly, subset = NULL, lag_symptom_start = 2, de
 		min_report_date <- min(df$report_date)
 		max_report_date <- max(df$report_date)
 
-		return(subset(df_weekly, person_id == my_person_id & report_date >= min_report_date  & report_date <= max_report_date))
+		return(filter(df_weekly, person_id == my_person_id & report_date >= min_report_date  & report_date <= max_report_date))
 	}, .progress = ifelse(n_cores > 1,"none","text"), .parallel=(n_cores > 1))
 
+	df_keep <- dplyr::anti_join(df_weekly, df_2clean,by=names(df_weekly))
 
-	df_keep <- diff_df(df_weekly, df_2clean)
-
-	df_2clean <- ddply(df_2clean,c("person_id", "bout_cluster"),function(df) {
-
-		return(mutate(df,next_n_bout=c(n_bout[-1], NA)))
-
-	})
+	df_2clean <- df_2clean %>% dplyr::group_by(person_id,bout_cluster) %>% dplyr::mutate(next_n_bout=c(n_bout[-1], NA)) %>% dplyr::arrange(comp_time)
 
 	if(!is.null(debug_id)){
 		df_print_define_same_bout(df_2clean, debug_id)		
@@ -299,18 +351,18 @@ define_same_bout <- function(df_weekly, subset = NULL, lag_symptom_start = 2, de
 	############################################################################
 	# Solve interrupted bout due non response to the question: Are you still ill?
 	############################################################################
-	
-	df_2clean_still_ill <- df_2clean %>% filter(is.na(still_ill)) %>% select(person_id,bout_cluster) %>% unique
+
+	df_2clean_still_ill <- df_2clean %>% dplyr::filter(is.na(still_ill)) %>% dplyr::select(person_id,bout_cluster) %>% unique
 
 	message("Check ",nrow(df_2clean_still_ill)," interrupted bout(s) due to non response to the question \"Are you still ill?\"")
 
-	df_2clean_still_ill <- match_df(df_2clean, df_2clean_still_ill,on=c("person_id", "bout_cluster"))
-	
-	df_keep_still_ill <- diff_df(df_2clean, df_2clean_still_ill)
+	df_2clean_still_ill <- semi_join(df_2clean, df_2clean_still_ill,by=c("person_id", "bout_cluster"))
 
-	df_clean_still_ill <- ddply(df_2clean_still_ill, c("person_id", "bout_cluster"), resolve_missing_still_ill, my_warning=my_warning,delay_in_reporting=delay_in_reporting , debug=debug)
-	
-	df_2clean <- rbind(df_keep_still_ill, df_clean_still_ill)
+	df_keep_still_ill <- anti_join(df_2clean, df_2clean_still_ill,by=names(df_2clean))
+
+	df_clean_still_ill <- df_2clean_still_ill %>% dplyr::group_by(person_id,bout_cluster) %>% dplyr::do(resolve_missing_still_ill(.,my_warning=my_warning,delay_in_reporting=delay_in_reporting , debug=debug))
+
+	df_2clean <- rbind_list(df_keep_still_ill, df_clean_still_ill) %>% dplyr::arrange(comp_time)
 
 	if(!is.null(debug_id)){
 		df_print_define_same_bout(df_2clean, debug_id)		
@@ -320,32 +372,17 @@ define_same_bout <- function(df_weekly, subset = NULL, lag_symptom_start = 2, de
 	#Solve cases who changed their mind and extended their bout
 	############################################################################
 
-	df_2clean_extended_bout <- df_2clean %>% filter(!still_ill & !is.na(n_bout) & !is.na(next_n_bout) & (n_bout != next_n_bout)) %>% select(person_id,bout_cluster) %>% unique
+	df_2clean_extended_bout <- df_2clean %>% dplyr::filter(!still_ill & !is.na(n_bout) & !is.na(next_n_bout) & (n_bout != next_n_bout)) %>% dplyr::select(person_id,bout_cluster) %>% unique
 
 	message("Check ",nrow(df_2clean_extended_bout)," participants who changed their mind and extended their bout")
 
-	df_2clean_extended_bout <- match_df(df_2clean, df_2clean_extended_bout,on=c("person_id", "bout_cluster"))
-	
-	df_keep_extended_bout <- diff_df(df_2clean, df_2clean_extended_bout)
+	df_2clean_extended_bout <- semi_join(df_2clean, df_2clean_extended_bout,by=c("person_id", "bout_cluster"))
 
-	df_clean_extended_bout <- ddply(df_2clean_extended_bout, c("person_id", "bout_cluster"), function(df) {
+	df_keep_extended_bout <- anti_join(df_2clean, df_2clean_extended_bout, by=names(df_2clean))
 
-		# message(unique(df$person_id))
-		# if changed their mind and difference between report dates is below max delay => solve it as same bout
-		i_test <- with(df, which(!still_ill & !is.na(n_bout) & !is.na(next_n_bout) & (n_bout != next_n_bout) & c(diff(report_date), 0) <= delay_in_reporting))
-		
-		if (length(i_test) != 0) {
-			df$still_ill[i_test] <- TRUE
-			df$same_bout[i_test + 1] <- "yes"
-			df[c(i_test, i_test + 1), my_warning] <- TRUE
-		} else if (debug) {
-			message("The following were not edited, check if all good please")
-			df_print_define_same_bout(df)
-		}
-		return(df)
-	}, .progress = "text")
+	df_clean_extended_bout <- df_2clean_extended_bout %>% group_by(person_id, bout_cluster) %>% do(clean_extended_bout(.,delay_in_reporting=delay_in_reporting, my_warning=my_warning, debug=debug))
 
-	df_2clean <- rbind(df_keep_extended_bout, df_clean_extended_bout)
+	df_2clean <- rbind_list(df_keep_extended_bout, df_clean_extended_bout) %>% dplyr::arrange(comp_time)
 
 	if(!is.null(debug_id)){
 		df_print_define_same_bout(df_2clean, debug_id)		
@@ -355,46 +392,17 @@ define_same_bout <- function(df_weekly, subset = NULL, lag_symptom_start = 2, de
 	#Solve interrupted bout due missing or wrong response to the question: Is it the same bout as in previous report?
 	############################################################################
 
-	df_2clean_same_bout <- df_2clean %>% filter(still_ill & !is.na(n_bout) & !is.na(next_n_bout) & (n_bout != next_n_bout)) %>% select(person_id,bout_cluster) %>% unique
+	df_2clean_same_bout <- df_2clean %>% dplyr::filter(still_ill & !is.na(n_bout) & !is.na(next_n_bout) & (n_bout != next_n_bout)) %>% dplyr::select(person_id,bout_cluster) %>% unique
 
 	message("Check ",nrow(df_2clean_same_bout)," interrupted bout(s) due missing or wrong response to the question \"Is it the same bout as in previous report?\"")
 
-	df_2clean_same_bout <- match_df(df_2clean, df_2clean_same_bout, on=c("person_id", "bout_cluster"))
-	df_keep_same_bout <- diff_df(df_2clean, df_2clean_same_bout)
+	df_2clean_same_bout <- semi_join(df_2clean, df_2clean_same_bout, by=c("person_id", "bout_cluster"))
+	
+	df_keep_same_bout <- anti_join(df_2clean, df_2clean_same_bout, by=names(df_2clean))
 
-	df_clean_same_bout <- ddply(df_2clean_same_bout, c("person_id", "bout_cluster"), function(df) {
+	df_clean_same_bout <- df_2clean_same_bout %>% group_by(person_id, bout_cluster) %>% do(clean_same_bout(.,delay_in_reporting=delay_in_reporting, my_warning=my_warning, debug=debug))
 
-		i_test <- with(df, which(still_ill & !is.na(n_bout) & !is.na(next_n_bout) & (n_bout != next_n_bout) & c(diff(report_date), 0) <= delay_in_reporting))
-		if (length(i_test) != 0) {
-
-			for (i in i_test) {
-
-				s_start <- subset(df, n_bout == n_bout[i + 1])$symptom_start
-				if(all(is.na(s_start))){
-					s_start_next <- s_start[1]
-				} else {
-					s_start_next <- first(na.omit(s_start))
-				}
-				# to be merged, symptom start of next bout must be before previous report date
-				# otherwise, it might be a new bout
-				if (!is.na(s_start_next) && df$report_date[i] >= s_start_next) {
-					df$same_bout[i + 1] <- "yes"
-					df[c(i, i + 1), my_warning] <- TRUE
-				} else if (debug) {
-					message("The following was not edited (case 1), check if all good please\n")
-					df_print_define_same_bout(df)
-				}
-
-			}
-		} else if (debug) {
-			message("The following was not edited (case 2), check if all good please\n")
-			df_print_define_same_bout(df)
-		}
-
-		return(df)
-	}, .progress = "text")
-
-	df_2clean <- rbind(df_keep_same_bout, df_clean_same_bout)
+	df_2clean <- rbind_list(df_keep_same_bout, df_clean_same_bout) %>% dplyr::arrange(comp_time)
 
 	if(!is.null(debug_id)){
 		df_print_define_same_bout(df_2clean, debug_id)		
@@ -402,160 +410,131 @@ define_same_bout <- function(df_weekly, subset = NULL, lag_symptom_start = 2, de
 
 	if (debug) {
 		message("The following were not edited at all, check if all good please")
-	#check what's remain, all good!
+		#check what's remain, all good!
 
 		df_check <- df_2clean %>% 
 		filter(eval(parse(text=my_warning),df_2clean)) %>% 
 		select(person_id,bout_cluster) %>% 
-		match_df(df_2clean, ., on=c("person_id", "bout_cluster")) %>% 
-		diff_df(df_2clean, .)
+		semi_join(df_2clean, ., by=c("person_id", "bout_cluster")) %>% 
+		anti_join(df_2clean, .)
 
 		df_print_define_same_bout(df_check)
 	}
 
-	df_weekly <- rbind(df_keep, df_2clean[names(df_keep)])
+	df_weekly <- rbind_list(df_keep, df_2clean[names(df_keep)]) %>% dplyr::arrange(comp_time)
 
 ############################################################################
 #Recount cleaned bout
 ############################################################################
 
-	df_2count <- df_2clean %>% filter(eval(parse(text=my_warning),df_2clean)) %>% select(person_id) %>% match_df(df_weekly,.,on="person_id")
-	df_keep <- diff_df(df_weekly, df_2count)
+	df_2count <- df_2clean %>% filter(eval(parse(text=my_warning),df_2clean)) %>% select(person_id) %>% semi_join(df_weekly,.,by="person_id")
+	df_keep <- anti_join(df_weekly, df_2count, by=names(df_weekly))
 
 	message("Recount cleaned bouts")
 
-	df_counted <- ddply(df_2count, "person_id", function(df) {
-		df <- count_same_bout(df, CR_as_TRUE, give_position = TRUE, give_length = TRUE, subset = subset)
-		return(df)
-	}, .progress = "text")
+	df_counted <- df_2count %>% dplyr::group_by("person_id") %>% dplyr::do(count_same_bout(., CR_as_TRUE, give_position = TRUE, give_length = TRUE, subset = subset))
 
-	df_weekly <- rbind(df_keep, df_counted)
-
-	#add person_id not in subset
-	df_weekly <- rbind.fill(df_weekly, df_keep_for_the_end)
-
-	df_weekly <- arrange(df_weekly, person_id, comp_time)
+	# bind all
+	df_weekly <- rbind_list(df_keep, df_counted, df_keep_for_the_end) %>% dplyr::arrange(person_id,comp_time)
 
 	return(df_weekly)
-
 }
 
 
 #'Find suitable symptom start date
 #'
 #'This function try to find a suitable symptom start date when several are available 
-#' @param to_match \code{data.frame} with two columns: person_id and n_bout (bout number) whose symptom start dates need to be resolved.
+#' @param df \code{data.frame}. Weekly survey of a single participant, containing all the reports of a given episode.
 #' @inheritParams define_same_bout
 #' @inheritParams clean_weekly_survey
-#' @import plyr
-find_suitable_symptom_start <- function(df_weekly, to_match, delay_in_reporting, my_warning, debug = FALSE, n_cores=1) {
+#' @import dplyr
+find_suitable_symptom_start <- function(df, df_weekly, delay_in_reporting, my_warning, debug = FALSE) {
 
-	if(is.null(n_cores)){
-		n_cores <- round(detectCores()/2)
+	df <- df %>% dplyr::arrange(comp_time)
+
+	date_min <- (df$report_date[1] - delay_in_reporting)
+
+	#include report date just before if it exists
+	if (x <- nrow(df2 <- dplyr::filter(df_weekly, person_id == df$person_id[1] & report_date < df$report_date[1]))) {
+		date_min <- max(c(df2$report_date[x], date_min))
 	}
 
-	if(n_cores > 1){
-		registerDoParallel(cores=n_cores)
+	#check if there is a symptom_start that is not delayed and that is before the first report 			
+	if (length(ind <- with(df, which((symptom_start > date_min) & (symptom_start <= report_date[1]))))) {
+		if (debug) {
+			message("debug1")
+			print(df)
+		}
+		
+		#take the first suitable s_start
+		df$symptom_start <- df$symptom_start[ind[1]]
+		if (debug) {
+			message("debug2")
+			print(df)
+		}
+	} else {
+		df[, my_warning] <- TRUE
+		if(length(ind <- with(df, which((symptom_start > (report_date[1] - delay_in_reporting)) & (symptom_start <= report_date[1]))))){
+			df_print_check(df)
+		}
 	}
 
-	df_2clean <- match_df(df_weekly, to_match, on = c("person_id", "n_bout"))
-	df_keep <- diff_df(df_weekly, df_2clean)
-
-	df_clean <- ddply(df_2clean, c("person_id", "n_bout"), function(df) {
-
-		date_min <- (df$report_date[1] - delay_in_reporting)
-
-		#include report date just before if it exists
-		if (x <- nrow(df2 <- subset(df_weekly, person_id == df$person_id[1] & report_date < df$report_date[1]))) {
-			date_min <- max(c(df2$report_date[x], date_min))
-		}
-
-		#check if there is a symptom_start that is not delayed and that is before the first report 			
-		if (length(ind <- with(df, which((symptom_start > date_min) & (symptom_start <= report_date[1]))))) {
-			if (debug) {
-				cat("if\n")
-				print(df)
-			}
-			#take the first suitable s_start
-			df$symptom_start <- df$symptom_start[ind[1]]
-			if (debug) {
-				print(df)
-			}
-		} else {
-			df[, my_warning] <- TRUE
-			if(length(ind <- with(df, which((symptom_start > (report_date[1] - delay_in_reporting)) & (symptom_start <= report_date[1]))))){
-				df_print_check(df)
-			}
-		}
-
-		return(df)
-
-	}, .progress = ifelse(debug | n_cores>1,"none","text"), .parallel=(n_cores > 1))
-
-	df_weekly <- rbind(df_keep, df_clean)
-
-	return(df_weekly)
-
+	return(df)
 }
-
 
 #'Find suitable symptom end date
 #'
 #'This function try to find a suitable symptom end date when several are available 
-#' @param to_match \code{data.frame} with two columns: person_id and n_bout (bout number) whose symptom end dates need to be resolved.
+#' @inheritParams find_suitable_symptom_start
 #' @inheritParams define_same_bout
 #' @inheritParams clean_weekly_survey
-find_suitable_symptom_end <- function(df_weekly, to_match, delay_in_reporting, my_warning, debug = FALSE, n_cores=1) {
+#' @import dplyr
+find_suitable_symptom_end <- function(df, delay_in_reporting, my_warning, debug = FALSE) {
 
-	if(is.null(n_cores)){
-		n_cores <- round(detectCores()/2)
-	}
-
-	if(n_cores > 1){
-		registerDoParallel(cores=n_cores)
-	}
-
-	df_2clean <- match_df(df_weekly, to_match, on = c("person_id", "n_bout"))
-	df_keep <- diff_df(df_weekly, df_2clean)
-
-	df_clean <- ddply(df_2clean, c("person_id", "n_bout"), function(df) {
-
-		x <- unique(df$report_date)
-		date_min <- max(x) - delay_in_reporting
+	x <- unique(df$report_date)
+	date_min <- max(x) - delay_in_reporting
 
 		#include report date just before if exist
-		if (length(x)>1) {
-			date_min <- max(rev(x)[2], date_min)
+	if (length(x)>1) {
+		date_min <- max(rev(x)[2], date_min)
+	}
+
+	#check if there is a symptom_end that is not delayed and that is before the last report 			
+	if (length(ind <- with(df, which((symptom_end >= date_min) & (symptom_end <= max(x)))))) {
+
+		if (debug) {
+			df_print_check(df)
 		}
-
-		#check if there is a symptom_end that is not delayed and that is before the last report 			
-		if (length(ind <- with(df, which((symptom_end >= date_min) & (symptom_end <= max(x)))))) {
-
-			if (debug) {
-				df_print_check(df)
-			}
-			#take the last suitable s_end (but it should not be more than one)
-			df$symptom_end <- df$symptom_end[rev(ind)[1]]
-			df$still_ill <- FALSE
-			if(nrow(df)>1){
-				df$symptom_end[df$report_date < max(x)] <- NA
-				df$still_ill[df$report_date<max(x)] <- TRUE
-			}
-			if (debug) {
-				df_print_check(df)
-			}
-		} else {
-			df[, my_warning] <- TRUE
+		#take the last suitable s_end (but it should not be more than one)
+		df$symptom_end <- df$symptom_end[last(ind)]
+		df$still_ill <- FALSE
+		if(nrow(df) > 1){
+			df$symptom_end[df$report_date < max(x)] <- NA
+			df$still_ill[df$report_date < max(x)] <- TRUE
 		}
+		if (debug) {
+			df_print_check(df)
+		}
+	} else {
+		df[, my_warning] <- TRUE
+	}
 
-		return(df)
+	return(df)
 
-	}, .progress = ifelse(debug | n_cores>1,"none","text"), .parallel=(n_cores > 1))
+}
 
-	df_weekly <- rbind(df_keep, df_clean)
+
+flag_warning <- function(df, df_weekly, df_warning) {
+
+	if (nrow(df)) {
+		message(nrow(df)," bouts where ", df_warning$description, "\n ==> flag with a warning.")
+		df_2clean <- semi_join(df_weekly, df, by = c("person_id", "n_bout"))
+		df_keep <- anti_join(df_weekly, df_2clean, by=names(df_weekly))
+		df_2clean[[df_warning$name]] <- TRUE
+		df_weekly <- rbind_list(df_keep, df_2clean) %>% dplyr::arrange(person_id,comp_time)
+	}
 
 	return(df_weekly)
-
 }
 
 #'Clean weekly survey
@@ -596,6 +575,9 @@ clean_weekly_survey <- function(flunet, subset=NULL, lag_symptom_start = 2, dela
 	} else {
 		return(flunet)
 	}	
+
+	# keep track of ordered variables
+	
 
 	#WARNING LIST
 	W_SSCY <- c("W_S_start_change_year","date of symptom start is not correctly entered due to change of year, e.g. symptom started in december 2012, were reported in january 2013 and entered as december 2013")
@@ -642,11 +624,10 @@ clean_weekly_survey <- function(flunet, subset=NULL, lag_symptom_start = 2, dela
 	
 	df_weekly <- define_same_bout(df_weekly, subset = subset, lag_symptom_start = lag_symptom_start, delay_in_reporting = delay_in_reporting, CR_as_TRUE = CR_as_TRUE, my_warning = my_warning, n_cores=n_cores, debug = debug, debug_id = NULL)
 
-	df_weekly <- arrange(df_weekly, person_id, comp_time)
+	df_weekly <- dplyr::arrange(df_weekly, person_id, comp_time)
 
 	#define past episodes
-	df_weekly <- transform(df_weekly, W_past_episode_full = (length_bout %in% c(1) & !is.na(symptom_start) & !is.na(symptom_end) & symptom_start <= symptom_end & symptom_start < report_date & symptom_end < report_date & still_ill %in% c(FALSE)))
-
+	df_weekly <- dplyr::mutate(df_weekly, W_past_episode_full = (!is.na(length_bout) & length_bout==1 & !is.na(symptom_start) & !is.na(symptom_end) & symptom_start <= symptom_end & symptom_start < report_date & symptom_end < report_date & !is.na(still_ill) & !still_ill))
 
 	######################################################################################################################################################
 	#											check: same_bout but several symptom_start\n
@@ -655,19 +636,39 @@ clean_weekly_survey <- function(flunet, subset=NULL, lag_symptom_start = 2, dela
 	my_warning <- df_warnings["W_SBBDSS","name"]
 
 	#same_bout but several symptom_start
-	tmp <- unique(subset(df_weekly, !is.na(length_bout) & length_bout > 1 & !is.na(symptom_start) & !eval(parse(text=my_warning)), select = c("person_id", "n_bout", "symptom_start")))
-	tmp_1 <- subset(count(tmp[, c("person_id", "n_bout")]), freq > 1)[, c("person_id", "n_bout")]
-	#same_bout but first symptom_start is missing
-	tmp <- unique(subset(df_weekly, !is.na(length_bout) & length_bout > 1 & is.na(symptom_start) & position_bout == 1 & !eval(parse(text=my_warning)), select = c("person_id", "n_bout")))
-	tmp2 <- unique(subset(df_weekly, !is.na(length_bout) & length_bout > 1 & !is.na(symptom_start) & position_bout != 1, select = c("person_id", "n_bout")))
-	tmp_2 <- match_df(tmp2, tmp, on=c("person_id", "n_bout"))
+	df_several_symptom_start <- df_weekly %>% 
+	dplyr::filter(!is.na(length_bout) & length_bout > 1 & !is.na(symptom_start) & !eval(parse(text=my_warning),df_weekly)) %>% 
+	dplyr::select(person_id,n_bout,symptom_start) %>% 
+	unique %>% 
+	dplyr::group_by(person_id,n_bout) %>% 
+	dplyr::summarize(n=n()) %>% 
+	dplyr::filter(n>1)
+
+	tmp <- df_weekly %>% 
+	dplyr::filter(!is.na(length_bout) & length_bout > 1 & is.na(symptom_start) & position_bout == 1 & !eval(parse(text=my_warning),df_weekly)) %>% 
+	dplyr::select(person_id,n_bout) %>% 
+	unique
+
+	df_missing_symptom_start <- df_weekly %>% 
+	dplyr::filter(!is.na(length_bout) & length_bout > 1 & (!is.na(symptom_start) & position_bout != 1)) %>% 
+	dplyr::select(person_id,n_bout) %>% 
+	unique %>% 
+	dplyr::semi_join(tmp,by=names(tmp))
 
 	#bind
-	tmp <- unique(rbind(tmp_1, tmp_2))
+	df_several_symptom_start <- rbind_list(df_several_symptom_start, df_missing_symptom_start) %>% unique 
 
-	if (nrow(tmp)) {
-		message(nrow(tmp)," have potentially: ", df_warnings["W_SBBDSS","description"], "\n ==> flag with a warning ONLY if a suitable symptom_start date can't be found.")
-		df_weekly <- find_suitable_symptom_start(df_weekly, tmp, delay_in_reporting, my_warning, debug, n_cores=n_cores)
+	if (nrow(df_several_symptom_start)) {
+		
+		message(nrow(df_several_symptom_start)," have potentially: ", df_warnings["W_SBBDSS","description"], "\n ==> flag with a warning ONLY if a suitable symptom_start date can't be found.")
+		
+		df_2clean <- semi_join(df_weekly, df_several_symptom_start, by = c("person_id", "n_bout")) 
+		df_keep <- anti_join(df_weekly, df_2clean, by=names(df_weekly))
+
+		df_clean <- df_2clean %>% group_by(person_id,n_bout) %>% do(find_suitable_symptom_start(., df_weekly, delay_in_reporting, my_warning, debug))
+
+		df_weekly <- rbind_list(df_keep, df_clean) %>% dplyr::arrange(person_id,comp_time)
+
 	}
 
 
@@ -677,19 +678,40 @@ clean_weekly_survey <- function(flunet, subset=NULL, lag_symptom_start = 2, dela
 
 	my_warning <- df_warnings["W_SBBDSE","name"]
 
-	#same_bout but several symptom_end
-	tmp <- unique(subset(df_weekly, !is.na(length_bout) & length_bout > 1 & !is.na(symptom_end) & !eval(parse(text=my_warning)), select = c("person_id", "n_bout", "symptom_end")))
-	tmp_1 <- subset(count(tmp[, c("person_id", "n_bout")]), freq > 1)[, c("person_id", "n_bout")]
-	#same_bout but symptom_end is not at the last report
-	tmp <- unique(subset(df_weekly, !is.na(length_bout) & length_bout > 1 & is.na(symptom_end) & position_bout == length_bout & !eval(parse(text=my_warning)), select = c("person_id", "n_bout")))
-	tmp2 <- unique(subset(df_weekly, !is.na(length_bout) & length_bout > 1 & !is.na(symptom_end) & position_bout != length_bout, select = c("person_id", "n_bout")))
-	tmp_2 <- match_df(tmp2, tmp)
-	#bind
-	tmp <- unique(rbind(tmp_1, tmp_2))
+	# same_bout but several symptom_end
+	df_several_symptom_end <- df_weekly %>% 
+	dplyr::filter(!is.na(length_bout) & length_bout > 1 & !is.na(symptom_end) & !eval(parse(text=my_warning),df_weekly)) %>% 
+	dplyr::select(person_id,n_bout,symptom_end) %>% 
+	unique %>% 
+	dplyr::group_by(person_id,n_bout) %>% 
+	dplyr::summarize(n=n()) %>% 
+	dplyr::filter(n>1)
 
-	if (nrow(tmp)) {
-		message(nrow(tmp)," have potentially: ", df_warnings["W_SBBDSE","description"], "\n ==> flag with a warning ONLY if a suitable symptom_end date can't be found.")
-		df_weekly <- find_suitable_symptom_end(df_weekly, tmp, delay_in_reporting, my_warning, debug, n_cores=n_cores)
+	tmp <- df_weekly %>% 
+	filter(!is.na(length_bout) & length_bout > 1 & is.na(symptom_end) & position_bout == length_bout & !eval(parse(text=my_warning),df_weekly)) %>% 
+	select(person_id,n_bout) %>% 
+	unique
+
+	df_missing_symptom_end <- df_weekly %>% 
+	filter(!is.na(length_bout) & length_bout > 1 & !is.na(symptom_end) & position_bout != length_bout) %>% 
+	select(person_id,n_bout) %>% 
+	unique %>% 
+	semi_join(tmp,by=names(tmp))
+
+	df_several_symptom_end <- rbind_list(df_several_symptom_end, df_missing_symptom_end) %>% unique 
+
+#here
+	if (nrow(df_several_symptom_end)) {
+		message(nrow(df_several_symptom_end)," have potentially: ", df_warnings["W_SBBDSE","description"], "\n ==> flag with a warning ONLY if a suitable symptom_end date can't be found.")
+
+		df_2clean <- semi_join(df_weekly, df_several_symptom_end, by = c("person_id", "n_bout")) 
+		df_keep <- anti_join(df_weekly, df_2clean, by=names(df_weekly))
+
+		df_clean <- df_2clean %>% group_by(person_id,n_bout) %>% do(find_suitable_symptom_end(., delay_in_reporting, my_warning, debug))
+
+		df_weekly <- rbind_list(df_keep, df_clean) %>% dplyr::arrange(person_id,comp_time)
+
+
 	}
 
 	######################################################################################################################################################	
@@ -697,42 +719,33 @@ clean_weekly_survey <- function(flunet, subset=NULL, lag_symptom_start = 2, dela
 	######################################################################################################################################################
 
 	my_warning <- df_warnings["W_SSTF","name"]
+	df_symptom_start_far <- filter(df_weekly, symptom_start < report_date & position_bout == 1 & !eval(parse(text=my_warning),df_weekly))
 	if (plot_check) {
-		tmp <- subset(df_weekly, symptom_start < report_date & position_bout == 1 & !eval(parse(text=my_warning)))
-		p <- ggplot(tmp, aes(x = as.numeric(report_date - symptom_start))) + geom_histogram(binwidth = 1) + xlim(c(0, delay_in_reporting * 4))
+		p <- ggplot(df_symptom_start_far, aes(x = as.numeric(report_date - symptom_start))) + geom_histogram(binwidth = 1) + xlim(c(0, delay_in_reporting * 4))
 		p <- p + geom_vline(xintercept = delay_in_reporting, colour = "red")
 		print(p)
 	}
 
-	tmp <- subset(df_weekly, symptom_start < (report_date - delay_in_reporting) & position_bout == 1 & !eval(parse(text=my_warning)),select=c("person_id", "n_bout"))
+	df_symptom_start_too_far <- filter(df_symptom_start_far,symptom_start < (report_date - delay_in_reporting))
 	
-	if (nrow(tmp)) {
-		message(nrow(tmp)," bouts where ", df_warnings["W_SSTF","description"], "\n ==> flag with a warning.")
-		df_2clean <- match_df(df_weekly, tmp, on = c("person_id", "n_bout"))
-		df_keep <- diff_df(df_weekly, df_2clean)
-		df_2clean[, my_warning] <- TRUE
-		df_weekly <- rbind(df_keep, df_2clean)
-	}
+
+	df_weekly <- flag_warning(df_symptom_start_too_far, df_weekly, df_warnings["W_SSTF",])
+
 
 	######################################################################################################################################################	
 	#														check: symptom_end is too far from last report_date\n
 	######################################################################################################################################################
 	my_warning <- df_warnings["W_SETF","name"]
+	df_symptom_end_far <- filter(df_weekly, symptom_end < report_date & position_bout == length_bout & !eval(parse(text=my_warning),df_weekly))
+
 	if (plot_check) {
-		tmp <- subset(df_weekly, symptom_end < report_date & position_bout == length_bout & !eval(parse(text=my_warning)))
-		p <- ggplot(tmp, aes(x = as.numeric(report_date - symptom_end))) + geom_histogram(binwidth = 1) + xlim(c(0, delay_in_reporting * 4))
+		p <- ggplot(df_symptom_end_far, aes(x = as.numeric(report_date - symptom_end))) + geom_histogram(binwidth = 1) + xlim(c(0, delay_in_reporting * 4))
 		p <- p + geom_vline(xintercept = delay_in_reporting, colour = "red")
 		print(p)
 	}
+	df_symptom_end_too_far <- filter(df_symptom_end_far,symptom_end < (report_date - delay_in_reporting))
 
-	tmp <- subset(df_weekly, symptom_end < (report_date - delay_in_reporting) & position_bout == length_bout & !eval(parse(text=my_warning)),select=c("person_id", "n_bout"))
-	if (nrow(tmp)) {
-		message(nrow(tmp)," bouts where ", df_warnings["W_SETF","description"], "\n ==> flag with a warning.")
-		df_2clean <- match_df(df_weekly, tmp, on = c("person_id", "n_bout"))
-		df_keep <- diff_df(df_weekly, df_2clean)
-		df_2clean[, my_warning] <- TRUE
-		df_weekly <- rbind(df_keep, df_2clean)
-	}
+	df_weekly <- flag_warning(df_symptom_end_too_far, df_weekly, df_warnings["W_SETF",])
 
 
 	######################################################################################################################################################
@@ -740,55 +753,48 @@ clean_weekly_survey <- function(flunet, subset=NULL, lag_symptom_start = 2, dela
 	######################################################################################################################################################
 	my_warning <- df_warnings["W_SSBPR","name"]
 
-	df_weekly <- arrange(df_weekly,person_id,comp_time)
-	# create previous_* variables. Create overlapping between person_id but very quick.
-	df_weekly <- transform(df_weekly,previous_report_date=c(as.Date(NA),report_date[-nrow(df_weekly)]),previous_person_id=c(NA,person_id[-nrow(df_weekly)]),previous_n_bout=c(NA,n_bout[-nrow(df_weekly)]))
+	df_weekly <- dplyr::arrange(df_weekly,person_id,comp_time)
+	# create previous_* variables. 
+	# This creates overlaps between different person_id but it's very quick.
+	df_weekly <- dplyr::mutate(df_weekly, 
+		previous_report_date=c(as.Date(NA),report_date[-nrow(df_weekly)]),
+		previous_person_id=c(NA,person_id[-nrow(df_weekly)]),
+		previous_n_bout=c(NA,n_bout[-nrow(df_weekly)])
+		)
+
 	# find all person_id
-	tmp <- subset(df_weekly,!is.na(position_bout) & position_bout==1 & !is.na(previous_person_id) & person_id==previous_person_id & (is.na(previous_n_bout) | n_bout!=previous_n_bout) & !is.na(symptom_start) & symptom_start<previous_report_date & !eval(parse(text=my_warning)))
-	if (nrow(tmp)) {
-		message(nrow(tmp)," bouts where ", df_warnings["W_SSBPR","description"], "\n ==> flag with a warning.")
-		df_2clean <- match_df(df_weekly, tmp, on = c("person_id", "n_bout"))
-		df_keep <- diff_df(df_weekly, df_2clean)
-		df_2clean[, my_warning] <- TRUE
-		df_weekly <- rbind(df_keep, df_2clean)
-	}
+	df_start_previous <- filter(df_weekly,!is.na(position_bout) & position_bout==1 & !is.na(previous_person_id) & person_id==previous_person_id & (is.na(previous_n_bout) | n_bout!=previous_n_bout) & !is.na(symptom_start) & symptom_start<previous_report_date & !eval(parse(text=my_warning),df_weekly))
+	
+	df_weekly <- flag_warning(df_start_previous, df_weekly, df_warnings["W_SSBPR",])
+	
 
 	######################################################################################################################################################
 	#														check: symptom_end < previous report_date\n
 	######################################################################################################################################################
 	my_warning <- df_warnings["W_SEBPR","name"]
-	df_weekly <- arrange(df_weekly,person_id,comp_time)
-	df_weekly <- transform(df_weekly,previous_position_bout=c(NA,position_bout[-nrow(df_weekly)]))
-	#find all person_id
-	tmp <- subset(df_weekly,!is.na(position_bout) & position_bout==length_bout & (is.na(previous_position_bout) | position_bout!=previous_position_bout) & !is.na(previous_person_id) & person_id==previous_person_id & !is.na(previous_n_bout) & n_bout==previous_n_bout & !is.na(symptom_end) & symptom_end<previous_report_date & !eval(parse(text=my_warning)))
-	if (nrow(tmp)) {
-		message(nrow(tmp)," bouts where ", df_warnings["W_SEBPR","description"], "\n ==> flag with a warning.")
-		df_2clean <- match_df(df_weekly, tmp, on = c("person_id", "n_bout"))
-		df_keep <- diff_df(df_weekly, df_2clean)
-		df_2clean[, my_warning] <- TRUE
-		df_weekly <- rbind(df_keep, df_2clean)
-	}
+	df_weekly <- dplyr::arrange(df_weekly,person_id,comp_time)
+	df_weekly <- mutate(df_weekly,previous_position_bout=c(NA,position_bout[-nrow(df_weekly)]))
 
+	#find all person_id
+	df_end_previous <- filter(df_weekly,!is.na(position_bout) & position_bout==length_bout & (is.na(previous_position_bout) | position_bout!=previous_position_bout) & !is.na(previous_person_id) & person_id==previous_person_id & !is.na(previous_n_bout) & n_bout==previous_n_bout & !is.na(symptom_end) & symptom_end<previous_report_date & !eval(parse(text=my_warning),df_weekly))
+	
+	df_weekly <- flag_warning(df_end_previous, df_weekly, df_warnings["W_SEBPR",])
+	
+	# remove intermediate variables	
 	df_weekly <- df_weekly[setdiff(names(df_weekly),paste("previous",c("report_date","n_bout","person_id","position_bout"),sep="_"))]
 
 	######################################################################################################################################################
 	#														check: symptom_start > report_date\n
 	######################################################################################################################################################
 	my_warning <- df_warnings["W_SSW","name"]
+	df_report_start <- filter(df_weekly, symptom_start > report_date & position_bout == 1 & !eval(parse(text=my_warning),df_weekly))
+	
 	if (plot_check) {
-		tmp <- subset(df_weekly, symptom_start > report_date & position_bout == 1 & !eval(parse(text=my_warning)))
-		p <- ggplot(tmp, aes(x = as.numeric(symptom_start - report_date))) + geom_histogram(binwidth = 1)
+		p <- ggplot(df_report_start, aes(x = as.numeric(symptom_start - report_date))) + geom_histogram(binwidth = 1)
 		print(p)
 	}
-	tmp <- subset(df_weekly, symptom_start > report_date & position_bout == 1 & !eval(parse(text=my_warning)))
-
-	if (nrow(tmp)) {
-		message(nrow(tmp)," bouts where ", df_warnings["W_SSW","description"], "\n ==> flag with a warning.")
-		df_2clean <- match_df(df_weekly, tmp, on = c("person_id", "n_bout"))
-		df_keep <- diff_df(df_weekly, df_2clean)
-		df_2clean[, my_warning] <- TRUE
-		df_weekly <- rbind(df_keep, df_2clean)
-	}
+	
+	df_weekly <- flag_warning(df_report_start, df_weekly, df_warnings["W_SSW",])
 
 
 	######################################################################################################################################################	
@@ -796,38 +802,30 @@ clean_weekly_survey <- function(flunet, subset=NULL, lag_symptom_start = 2, dela
 	######################################################################################################################################################	
 	my_warning <- df_warnings["W_SEW","name"]
 
+	df_report_end <- filter(df_weekly, !is.na(n_bout) & symptom_end > report_date & !eval(parse(text=my_warning),df_weekly))
+
 	if (plot_check) {
-		tmp <- subset(df_weekly, !is.na(n_bout) & symptom_end > report_date & !eval(parse(text=my_warning)))
-		p <- ggplot(tmp, aes(x = as.numeric(symptom_end - report_date))) + geom_histogram(binwidth = 1)
+		p <- ggplot(df_report_end, aes(x = as.numeric(symptom_end - report_date))) + geom_histogram(binwidth = 1)
 		print(p)
 	}
-	tmp <- subset(df_weekly, !is.na(n_bout) & symptom_end > report_date & !eval(parse(text=my_warning)))
-	if (nrow(tmp)) {
-		message(nrow(tmp)," bouts where ", df_warnings["W_SEW","description"], "\n ==> flag with a warning.")
-		df_clean <- match_df(df_weekly, tmp, on = c("person_id", "n_bout"))
-		df_keep <- diff_df(df_weekly, df_clean)
-		df_clean[, my_warning] <- TRUE
-		df_weekly <- rbind(df_keep, df_clean)
-	}
+
+	df_weekly <- flag_warning(df_report_end, df_weekly, df_warnings["W_SEW",])
+	
 
 	######################################################################################################################################################	
 	#														check: symptom_start > symptom_end\n
 	######################################################################################################################################################	
 	my_warning <- df_warnings["W_SSASE","name"]
 
+	df_end_start <- subset(df_weekly, !is.na(n_bout) & symptom_start > symptom_end & !eval(parse(text=my_warning)))
+
 	if (plot_check) {
-		tmp <- subset(df_weekly, !is.na(n_bout) & symptom_start > symptom_end & !eval(parse(text=my_warning)))
-		p <- ggplot(tmp, aes(x = as.numeric(symptom_start - symptom_end))) + geom_histogram(binwidth = 1)
+		p <- ggplot(df_end_start, aes(x = as.numeric(symptom_start - symptom_end))) + geom_histogram(binwidth = 1)
 		print(p)
 	}
-	tmp <- subset(df_weekly, !is.na(n_bout) & symptom_start > symptom_end & !eval(parse(text=my_warning)))
-	if (nrow(tmp)) {
-		message(nrow(tmp)," bouts where ", df_warnings["W_SSASE","description"], "\n ==> flag with a warning.")
-		df_clean <- match_df(df_weekly, tmp, on = c("person_id", "n_bout"))
-		df_keep <- diff_df(df_weekly, df_clean)
-		df_clean[, my_warning] <- TRUE
-		df_weekly <- rbind(df_keep, df_clean)
-	}
+
+	df_weekly <- flag_warning(df_end_start, df_weekly, df_warnings["W_SSASE",])
+
 
 	######################################################################################################################################################
 	#											check: misc\n
@@ -842,7 +840,6 @@ clean_weekly_survey <- function(flunet, subset=NULL, lag_symptom_start = 2, dela
 		df_weekly$health_score[ind] <- NA
 		df_weekly[ind, my_warning] <- TRUE			
 	}
-
 	
 	#log
 	tmp <- rename(count(subset(melt(df_weekly,measure.vars=df_warnings$name),value),vars="variable"),c("variable"="name"))
@@ -862,17 +859,15 @@ clean_weekly_survey <- function(flunet, subset=NULL, lag_symptom_start = 2, dela
 #' 
 #' This function merges multiple reports occuring on the same day, due to participant error. This function account for the fact that multiple reports might contain complementary information.
 #' @inheritParams clean_weekly_survey
+#' @note \itemize{
+#' 	\item For logical variables, the logical OR is evaluated over non \code{NA} values. If all values are \code{NA}, then \code{NA} is returned.
+#' 	\item For non-logical variables, the last non \code{NA} value is returned. If all values are \code{NA}, then \code{NA} is returned.
+#'  \item There is also the possibility to always take the first value entered if relevant.
+#' }
 #' @export
-#' @import plyr parallel doParallel
-resolve_multiple_report_date <- function(flunet, n_cores=1) {
+#' @import myRtoolbox dplyr
+resolve_multiple_report_date <- function(flunet) {
 
-	if(is.null(n_cores)){
-		n_cores <- round(detectCores()/2)
-	}
-
-	if(n_cores > 1){
-		registerDoParallel(cores=n_cores)
-	}
 
 	if(is_survey_present(flunet,survey="weekly",warning_message="nothing to do")){
 		df_weekly <- flunet$surveys$weekly
@@ -881,13 +876,13 @@ resolve_multiple_report_date <- function(flunet, n_cores=1) {
 	}	
 
 	#count how many entries have the same report_date
-	tmp <- count(df_weekly, vars=c("person_id", "report_date"))
-	prop <- sum(tmp$freq > 1)/nrow(tmp) * 100
+	x <- df_weekly %>%  dplyr::group_by(person_id,report_date) %>% dplyr::summarize(n=n())
+	prop <- sum(x$n > 1)/nrow(x) * 100
 
 	message(round(prop, 2), "% of the reports correspond to more than one report per day")
 	#select person_id - report_date
-	df_2clean <- match_df(df_weekly, subset(tmp,freq>1), on=c("person_id", "report_date"))	
-	df_keep <- match_df(df_weekly, subset(tmp,freq==1), on=c("person_id", "report_date"))
+	df_2clean <- x %>% filter(n>1) %>% semi_join(df_weekly, ., by=c("person_id", "report_date"))	
+	df_keep <- anti_join(df_weekly,df_2clean,by=names(df_weekly))
 
 	## for each variables defines which duplicate to choose:
 
@@ -896,62 +891,42 @@ resolve_multiple_report_date <- function(flunet, n_cores=1) {
 	# the first same_bout should be NA or No but the second will be "yes" by default although it should be NA or No
 	# if this is not the start of a new episode then the first report should be "yes" unless the person changes it
 	# thus always take first report
-	var_always_first <- c("same_bout")
+	var_first <- c("same_bout")
 
 	## bool variables
 	tmp <- vapply(df_weekly,function(x) all(is.logical(x)), logical(1))
 	var_bool <- names(tmp[tmp])
-	var_bool <- setdiff(var_bool,var_always_first)
+	var_bool <- setdiff(var_bool,var_first)
 
-	## date variables
-	tmp <- vapply(df_weekly,function(x) all(inherits(x,"Date")), logical(1))
-	var_date <- names(tmp[tmp])
-	var_date  <- setdiff(var_date,var_always_first)
+	## date variables (take last)
+	var_last <- names(tmp[!tmp])
+	var_last  <- setdiff(var_last,var_first)
 
-	## other variables
-	var_char <- setdiff(names(df_weekly),c(var_always_first,var_bool,var_date))
+	# summarize first
+	# summarize_first <- paste0("first(as.factor(",var_first,"))") # as.factor appears necessary otherwise same_bout factor is converted into integer
+	summarize_first <- paste0("first_na(",var_first,")") # as.factor appears necessary otherwise same_bout factor is converted into integer
+	names(summarize_first) <- var_first
 
-	#clean multiple person_id,report_date entries
-	df_clean <- ddply(df_2clean, c("person_id", "report_date"), function(df) {
+	# summarize bool
+	summarize_bool <- paste0("any_na(",var_bool,",na_rm=TRUE)")
+	names(summarize_bool) <- var_bool
 
-		# first, arrange by compilation time (required to solve always_first)
-		df <- arrange(df, comp_time)
+	# summarize last non NA
+	summarize_last <- paste0("last_na(",var_last,",na_rm=TRUE)")
+	names(summarize_last) <- var_last
 
-		# solve always first
-		for(var in  var_always_first){
-			df[,  var] <- df[1, var]
-		}		
+	# combine
+	summarize_all <- c(summarize_first, summarize_bool, summarize_last)
 
-		# solve logical duplicate
-		for(var in var_bool){
-			df[, var] <- any_na_rm(df[, var])
-		}		
+	# remove grouping variables
+	summarize_all <- summarize_all[setdiff(names(summarize_all),c("person_id","report_date"))]
 
-		# solve date duplicate, take the last one entered
-		for(var in var_date){
-			df[, var] <- last_na_rm(df[, var])
-		}		
+	df_clean <- df_2clean %>% dplyr::group_by(person_id,report_date) %>% dplyr::arrange(comp_time)
 
-		#solve non-logical
-		for(var in var_char){
-			df[, var] <- last_na_rm(df[, var])
-		}
-
-
-		df <- unique(df)
-
-		if (nrow(df) > 1) {
-			message("Duplicates could not be resolved for the following reports:")
-			print(df)
-		}
-
-		return(df)
-
-	}, .progress = ifelse(n_cores > 1,"none","text"), .parallel=(n_cores > 1))
-
-	#
-	df_weekly <- rbind(df_keep, df_clean)
-	df_weekly <- arrange(df_weekly,person_id,report_date)
+	call_summarize <- parse(text=sprintf("dplyr::summarize(df_clean,%s)",paste(paste(names(summarize_all),summarize_all,sep="="),collapse=",")))	
+	df_clean <- eval(call_summarize)
+	
+	df_weekly <- rbind_list(df_keep, df_clean) %>% dplyr::arrange(person_id,report_date)
 
 	#check for people with symptom_start > symptom_end
 	ind <- with(df_weekly,which(symptom_start > symptom_end & !is.na(n_bout) & !W_S_start_after_S_end))
@@ -968,14 +943,14 @@ resolve_multiple_report_date <- function(flunet, n_cores=1) {
 
 #'Resolve multiple profiles
 #'
-#'Multiple profiles arise when participants update their profile during the season. This function forces only one profile per participant by summarizing logical variables with \code{\link[base]{any}} and non-logical value with \code{\link[dplyr]{last}}. See note below for more details.
+#'Multiple profiles arise when participants update their profile during the season. This function forces only one profile per participant by summarizing logical variables with \code{\link[myRtoolbox]{any_na}} and non-logical value with \code{\link[myRtoolbox]{last_na}}. See note below for more details.
 #' @inheritParams clean_weekly_survey
 #' @note \itemize{
-#' 	\item For logical variables, \code{\link[base]{any}} is evaluated with \code{na.rm=TRUE}. If all values are \code{NA}, \code{NA} is returned.
-#' 	\item For non-logical variables, \code{\link[dplyr]{last}} is evaluated after \code{\link[stats]{na.omit}}. If all values are \code{NA}, \code{NA} is returned.
+#' 	\item For logical variables, the logical OR is evaluated over non \code{NA} values. If all values are \code{NA}, then \code{NA} is returned.
+#' 	\item For non-logical variables, the last non \code{NA} value is returned. If all values are \code{NA}, then \code{NA} is returned.
 #' }
 #' @export
-#' @import dplyr
+#' @import dplyr myRtoolbox
 resolve_multiple_profiles <- function(flunet){
 
 	if(is_survey_present(flunet,survey="intake",warning_message="nothing to resolve")){
@@ -988,52 +963,41 @@ resolve_multiple_profiles <- function(flunet){
 	df_intake <- arrange(df_intake,comp_time)
 
 	#how many duplicates?
-	#count how many entries have the same report_date
-	tmp <- count(df_intake, vars=c("person_id"))
-	prop <- sum(tmp$freq > 1)/nrow(tmp) * 100
+	#count how many entries have the same report_date	
+	x <- df_intake %>%  dplyr::group_by(person_id) %>% dplyr::summarize(n=n())
+	prop <- sum(x$n > 1)/nrow(x) * 100
 
 	message(round(prop, 2), "% of the participants have more than one profile")
+	#select person_id - report_date
+	df_2clean <- x %>% filter(n>1) %>% semi_join(df_intake, ., by=c("person_id"))	
+	df_keep <- anti_join(df_intake,df_2clean,by=names(df_intake))
 
-	df_2clean <- match_df(df_intake, subset(tmp,freq>1), on=c("person_id"))	
-	df_keep <- match_df(df_intake, subset(tmp,freq==1), on=c("person_id"))
 
 	# find logical variables
 	tmp <- sapply(df_2clean,function(x) all(is.logical(x)))
 	var_bool <- names(tmp[tmp])
-	var_not_bool <- names(tmp[!tmp])
+	var_last <- names(tmp[!tmp])
 
-	#force 1 profile per person_id: multiple intakes arise when it is updated by user
-	df_clean <- ddply(df_2clean, "person_id", function(df) {
+	# summarize bool
+	summarize_bool <- paste0("any_na(",var_bool,",na_rm=TRUE)")
+	names(summarize_bool) <- var_bool
 
-		#solve logical duplicate
-		for(var in var_bool){
-			x <- df[[var]]
-			df[[var]] <- any(x,na.rm=!all(is.na(x)))
-		}		
+	# summarize last non NA
+	summarize_last <- paste0("last_na(",var_last,",na_rm=TRUE)")
+	names(summarize_last) <- var_last
 
-		#solve non-logical
-		for(var in var_not_bool){
-			x <- df[[var]]
-			if(all(is.na(x))){
-				x <- x[1]
-			} else {
-				df[[var]] <- last(na.omit(x))	
-			}
-		}
+	# combine
+	summarize_all <- c(summarize_bool, summarize_last)
 
-		df <- unique(df)
+	# remove grouping variables
+	summarize_all <- summarize_all[setdiff(names(summarize_all),c("person_id"))]
 
-		if (nrow(df) > 1) {
-			print(df)
-		}
+	df_clean <- df_2clean %>% dplyr::group_by(person_id) %>% dplyr::arrange(comp_time)
 
-		return(df)
-
-	}, .progress = "text")
-
-	df_intake <- rbind(df_keep, df_clean)
-
-	df_intake <- arrange(df_intake,comp_time)
+	call_summarize <- parse(text=sprintf("dplyr::summarize(df_clean,%s)",paste(paste(names(summarize_all),summarize_all,sep="="),collapse=",")))	
+	df_clean <- eval(call_summarize)
+	
+	df_intake <- rbind_list(df_keep, df_clean) %>% dplyr::arrange(comp_time)
 
 	flunet$surveys$intake <- df_intake
 
