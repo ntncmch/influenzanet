@@ -84,31 +84,6 @@ df_print_check_raw <-function(df,id=NULL){
 
 }
 
-# perform logical operation "any" after NA's removing
-# @param x_true a vector containing the values of x that should be considered as TRUE. The other values are considered as FALSE. The function returns the first value of x_true found in x.
-any_na_rm <- function(x, x_true=NULL){
-	
-# TODO: this function should be split in two as the part with x_true doesn't return TRUE/FALSE but the first value found in x_true.
-
-	if(!is.null(x_true)){
-		
-		# is there any of these "TRUE" values? if so return the first one	
-		for(x_val in x_true){
-			if(x_val %in% x){
-				return(x_val)
-			}
-		}
-		
-		# if not, return the most common one among the "FALSE" one
-		return(most_common_na_rm(x))
-	}
-	
-	# x must be logical
-	return(any(x, na.rm = TRUE))
-	
-}
-
-
 most_common_na_rm<-function(x){
 
 	if(all(is.na(x))){
@@ -137,7 +112,7 @@ most_common_na_rm<-function(x){
 is_survey_present <- function(flunet, survey, warning_message="") {
 
 	if(!inherits(flunet,"flunet")){
-		stop(sQuote("flunet")," argument is not a flunet object")
+		stop(sQuote("flunet")," argument is not a flunet object",call.=FALSE)
 	}
 
 	missing_survey <- setdiff(survey,names(flunet$surveys))
