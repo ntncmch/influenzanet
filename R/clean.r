@@ -576,8 +576,7 @@ clean_weekly_survey <- function(flunet, subset=NULL, lag_symptom_start = 2, dela
 		return(flunet)
 	}	
 
-	# keep track of ordered variables
-	
+	var_ordered <- get_ordered_variables(df_weekly)
 
 	#WARNING LIST
 	W_SSCY <- c("W_S_start_change_year","date of symptom start is not correctly entered due to change of year, e.g. symptom started in december 2012, were reported in january 2013 and entered as december 2013")
@@ -841,7 +840,13 @@ clean_weekly_survey <- function(flunet, subset=NULL, lag_symptom_start = 2, dela
 		df_weekly[ind, my_warning] <- TRUE			
 	}
 	
-	#log
+
+	######################################################################################################################################################
+	#											last few bits
+	######################################################################################################################################################	
+
+
+	# write log
 	tmp <- rename(count(subset(melt(df_weekly,measure.vars=df_warnings$name),value),vars="variable"),c("variable"="name"))
 	tmp <- mutate(tmp,name=as.character(name))
 	df_warnings <- join(df_warnings,tmp,by='name')
@@ -849,7 +854,7 @@ clean_weekly_survey <- function(flunet, subset=NULL, lag_symptom_start = 2, dela
 	flunet$log$clean_weekly_survey <- list("lag_symptom_start"=lag_symptom_start,"delay_in_reporting"=delay_in_reporting,"CR_as_TRUE"=CR_as_TRUE,"warnings"=df_warnings)
 
 	#return
-	flunet$surveys$weekly <- df_weekly
+	flunet$surveys$weekly <- set_ordered_variables(df_weekly,var_ordered)
 
 	return(flunet)
 }
@@ -874,6 +879,8 @@ resolve_multiple_report_date <- function(flunet) {
 	} else {
 		return(flunet)
 	}	
+
+	var_ordered <- get_ordered_variables(df_weekly)
 
 	#count how many entries have the same report_date
 	x <- df_weekly %>%  dplyr::group_by(person_id,report_date) %>% dplyr::summarize(n=n())
@@ -936,7 +943,8 @@ resolve_multiple_report_date <- function(flunet) {
 		df_weekly$S_start_after_S_end[ind] <- TRUE		
 	}
 
-	flunet$surveys$weekly <- df_weekly
+
+	flunet$surveys$weekly <- set_ordered_variables(df_weekly,var_ordered)
 
 	return(flunet)
 }

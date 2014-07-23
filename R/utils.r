@@ -127,6 +127,28 @@ is_survey_present <- function(flunet, survey, warning_message="") {
 }
 
 
+get_ordered_variables <- function(df) {
+
+	# keep track of ordered variables
+	x <- sapply(df,is.ordered)
+	var_ordered <- names(x)[x]
+
+	# and ordered levels
+	var_ordered <- llply(df[var_ordered],levels)
+
+	return(var_ordered)
+}
+
+set_ordered_variables <- function(df, var_ordered) {
+
+	mutate_ordered <- paste0("ordered(",names(var_ordered),",levels=",var_ordered,")")
+	names(mutate_ordered) <- names(var_ordered)
+	call_mutate <- parse(text=sprintf("dplyr::mutate(df,%s)",paste(paste(names(mutate_ordered),mutate_ordered,sep="="),collapse=",")))	
+	df <- eval(call_mutate)
+	return(df)
+}
+
+
 
 
 
