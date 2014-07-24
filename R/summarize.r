@@ -84,12 +84,12 @@ summarize_severity <- function(flunet, severity=c("ARI_ecdc","ILI_ecdc","ILI_fev
 
 	# keep only reports with symptoms in severity
 	any_severity <- paste(severity,collapse=" | ")	
-	df_summarize <- subset(df_weekly,eval(parse(text=any_severity)))
+	df_summarize <- filter(df_weekly,eval(parse(text=any_severity),df_weekly))
 	df_keep <- anti_join(df_weekly,df_summarize,by=names(df_weekly))
 
 	severity_ordered <- ordered(severity)
 
-	df_summarize$symptom_severity <- apply(df_summarize[severity],1,function(x) {max(severity_ordered[as.logical(x)])})
+	df_summarize$symptom_severity <- apply(df_summarize[severity],1,function(x) {max_na(severity_ordered[as.logical(x)],na_rm=TRUE)})
 	
 	df_weekly <- rbind_list(df_summarize,df_keep) %>% arrange(person_id,comp_time)
 
