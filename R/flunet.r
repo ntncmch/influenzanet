@@ -6,7 +6,8 @@
 #' @param  contact_survey data frame
 #' @param  context list
 #' @export
-#' @import plyr lubridate
+#' @importFrom lubridate guess_formats
+#' @importFrom plyr mapvalues rename
 flunet <- function(intake_survey=NULL, weekly_survey=NULL, contact_survey=NULL, context=NULL){
 
 	# check surveys

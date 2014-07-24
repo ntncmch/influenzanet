@@ -9,7 +9,7 @@
 #' @inheritParams summarize_symptoms
 #' @note This function takes \code{symptom_start} and \code{symptom_end} from the first and last report respectively. Thus, only episodes with both information are processed.
 #' @export
-#' @import plyr dplyr
+#' @import dplyr
 #' @return A \code{\link{flunet}} object with the empirical distribution stored as a \code{data.frame} in \code{flunet$log$empirical_distributions$symptom_duration}.
 #' @examples \dontrun{
 #' bad_warnings <- c("W_S_start_too_far", "W_S_start_before_previous_report", "W_S_start_after_S_end", "W_S_start_wrong","W_S_end_too_far", "W_S_end_before_previous_report", "W_S_end_wrong")		
@@ -32,7 +32,7 @@ empirical_distribution_symptom_duration <- function(flunet, subset=NULL, remove_
 
 	# keep only bout with valid date of symptom onset and end and within subset
 	df_subset <- filter(df_weekly,((!is.na(symptom_start) & position_bout == 1) | (!is.na(symptom_end) & position_bout == length_bout)) & eval(parse(text=subset),df_weekly)) %>%
-	match_df(df_weekly,.,c("person_id","n_bout"))  %>% 
+	semi_join(df_weekly,.,by=c("person_id","n_bout"))  %>% 
 	group_by(person_id,n_bout) %>% 
 	arrange(comp_time)
 

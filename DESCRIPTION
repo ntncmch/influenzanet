@@ -11,4 +11,4 @@ Depends:
 License: GPL-2
 LazyData: true
 Imports:
-    ggplot2,igraph,jsonlite,lubridate,plyr,stringr,parallel,doParallel,myRtoolbox,dplyr
+    ggplot2,igraph,jsonlite,lubridate,plyr,stringr,parallel,doParallel,myRtoolbox,dplyr,reshape2

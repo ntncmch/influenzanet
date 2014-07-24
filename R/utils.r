@@ -5,7 +5,7 @@
 #' @param var_names variable to be converted
 #' @param NA_as_FALSE convert \code{NA} into \code{FALSE}
 #' @inheritParams clean_weekly_survey
-#' @import plyr
+#' @importFrom plyr revalue
 char2bool <- function(x,var_names,CR_as_TRUE=FALSE,NA_as_FALSE=FALSE) {
 
 	replace <- c("yes"=TRUE,"no"=FALSE,"CR"=CR_as_TRUE)
@@ -29,13 +29,13 @@ char2bool <- function(x,var_names,CR_as_TRUE=FALSE,NA_as_FALSE=FALSE) {
 #'print helper
 #' @param df data frame
 #' @param id character
-#' @import plyr
+#' @importFrom plyr d_ply
 #' @name print helper
 #' @aliases df_print_define_same_bout
 df_print_define_same_bout <-function(df,id=NULL){
 
 	if(!is.null(id)){
-		df<-subset(df,person_id%in%id)
+		df <- subset(df,person_id%in%id)
 		if(!nrow(df)){
 			cat("id not found\n")
 		}
@@ -143,7 +143,7 @@ set_ordered_variables <- function(df, var_ordered) {
 
 	mutate_ordered <- paste0("ordered(",names(var_ordered),",levels=",var_ordered,")")
 	names(mutate_ordered) <- names(var_ordered)
-	call_mutate <- parse(text=sprintf("dplyr::mutate(df,%s)",paste(paste(names(mutate_ordered),mutate_ordered,sep="="),collapse=",")))	
+	call_mutate <- parse(text=sprintf("mutate(df,%s)",paste(paste(names(mutate_ordered),mutate_ordered,sep="="),collapse=",")))	
 	df <- eval(call_mutate)
 	return(df)
 }

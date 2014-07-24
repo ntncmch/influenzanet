@@ -8,7 +8,8 @@
 #' This is needed to resolve questions like "did your symptoms developed over a few hours?".
 #' @param keep_bool logical, if \code{TRUE}, all intermediate, logical, variables created by the function are kept. That is the variables with CR (can't remember) after transformation accoridng to \code{CR_as_TRUE}
 #' @export
-#' @import plyr
+#' @import dplyr
+#' @importFrom plyr mapvalues
 #' @note If the question on sudden onset of fever is not answered (\code{fever_sudden=NA}) but the participant didn't reported fever, then it is set to \code{FALSE}.
 #' @return a \code{\link{flunet}} object. The weekly survey contains a logical column per symptom definitions.
 #' @note the symptoms definitions for ARI and ILI are taken from the ECDC: \url{http://ecdc.europa.eu/en/activities/surveillance/eisn/surveillance/pages/influenza_case_definitions.aspx}
@@ -90,7 +91,7 @@ summarize_severity <- function(flunet, severity=c("ARI_ecdc","ILI_ecdc","ILI_fev
 
 	df_summarize$symptom_severity <- apply(df_summarize[severity],1,function(x) {max(severity_ordered[as.logical(x)])})
 	
-	df_weekly <- rbind_list(df_summarize,df_keep) %>% dplyr::arrange(person_id,comp_time)
+	df_weekly <- rbind_list(df_summarize,df_keep) %>% arrange(person_id,comp_time)
 
 	flunet$surveys$weekly <- set_ordered_variables(df_weekly,var_ordered)
 
@@ -151,7 +152,7 @@ summarize_age <- function(flunet, breaks, labels = NULL, include.lowest = TRUE, 
 		return(flunet)
 	}
 	
-	df_intake <- dplyr::mutate(df_intake, age_group = cut(age, breaks = breaks, labels=labels, include.lowest=include.lowest, right=right, ordered_result=ordered_result, ...))
+	df_intake <- mutate(df_intake, age_group = cut(age, breaks = breaks, labels=labels, include.lowest=include.lowest, right=right, ordered_result=ordered_result, ...))
 
 	# write info on the log
 	flunet$log$summarize_age <- list("breaks"=breaks,"labels"=attributes(df_intake$age_group)$levels)
@@ -187,16 +188,16 @@ summarize_baseline_health_score <- function(flunet, fun_summarize=median) {
 	# write info on the log
 	flunet$log$summarize_baseline_health_score <- list("fun_summarize"=fun_summarize)
 
-	flunet$surveys$intake <- df_weekly %>% dplyr::filter(
+	flunet$surveys$intake <- df_weekly %>% filter(
 		!is.na(health_score) & (
 			(is.na(n_bout) & (is.na(still_ill) | !still_ill) & (is.na(still_off) | still_off!="yes") & is.na(cause)) |
 			(!is.na(symptom_end) & symptom_end < report_date) | 
 			((is.na(still_ill) | !still_ill) & (is.na(n_bout) | position_bout == length_bout))
 			)
 		) %>% 
-	dplyr::group_by(person_id) %>% 
-	dplyr::summarise(baseline_health_score=fun_summarize(health_score)) %>% 
-	dplyr::left_join(flunet$surveys$intake,.,by="person_id")
+	group_by(person_id) %>% 
+	summarise(baseline_health_score=fun_summarize(health_score)) %>% 
+	left_join(flunet$surveys$intake,.,by="person_id")
 
 	return(flunet)
 }
@@ -218,7 +219,7 @@ summarize_episode <- function(flunet) {
 	}
 
 	# check no duplicated report dates
-	n_duplicates <- df_weekly %>% dplyr::group_by(person_id,report_date) %>% dplyr::summarize(n=n()) %>% filter(n>1) %>% nrow
+	n_duplicates <- df_weekly %>% group_by(person_id,report_date) %>% summarize(n=n()) %>% filter(n>1) %>% nrow
 	if(n_duplicates){
 		warning("Duplicated report dates in weekly survey are solved using the function ",sQuote("resolve_multiple_report_date"),call.=FALSE)
 		flunet <- resolve_multiple_report_date(flunet)
@@ -269,7 +270,7 @@ summarize_episode <- function(flunet) {
 	# summarize
 	# keep only reports belonging to a bout and put them in the right order
 	df_weekly_bout <- filter(df_weekly,!is.na(n_bout)) %>% 
-	dplyr::arrange(person_id,report_date)
+	arrange(person_id,report_date)
 
 	n_episodes <- df_weekly_bout %>% select(person_id,n_bout) %>% unique %>% nrow
 	n_participants <- df_weekly_bout %>% select(person_id) %>% unique %>% nrow
@@ -278,7 +279,7 @@ summarize_episode <- function(flunet) {
 
 	df_episode <- df_weekly_bout %>% group_by(person_id,n_bout)
 
-	call_summarize <- parse(text=sprintf("dplyr::summarize(df_episode,%s)",paste(paste(names(summarize_all),summarize_all,sep="="),collapse=",")))	
+	call_summarize <- parse(text=sprintf("summarize(df_episode,%s)",paste(paste(names(summarize_all),summarize_all,sep="="),collapse=",")))	
 	df_episode <- eval(call_summarize) %>% ungroup
 
 	# mutate
@@ -296,7 +297,7 @@ summarize_episode <- function(flunet) {
 	var_bool <- extract_string(var_time,"time_",2)
 	mutate_bool <- paste0(var_bool," | !is.na(",var_time,")")
 	names(mutate_bool) <- var_bool
-	call_mutate <- parse(text=sprintf("dplyr::mutate(df_episode,%s)",paste(paste(names(mutate_bool),mutate_bool,sep="="),collapse=",")))
+	call_mutate <- parse(text=sprintf("mutate(df_episode,%s)",paste(paste(names(mutate_bool),mutate_bool,sep="="),collapse=",")))
 	df_episode <-  eval(call_mutate)
 
 	# logical variable *_no should be consistent
@@ -309,7 +310,7 @@ summarize_episode <- function(flunet) {
 		names(mutate_var) <- var_no
 		mutate_bool <- c(mutate_bool,mutate_var)
 	}
-	call_mutate <- parse(text=sprintf("dplyr::mutate(df_episode,%s)",paste(paste(names(mutate_bool),mutate_bool,sep="="),collapse=",")))
+	call_mutate <- parse(text=sprintf("mutate(df_episode,%s)",paste(paste(names(mutate_bool),mutate_bool,sep="="),collapse=",")))
 	df_episode <-  eval(call_mutate)
 
 
