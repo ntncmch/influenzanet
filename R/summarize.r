@@ -63,33 +63,50 @@ summarize_symptoms <- function(flunet,definitions=c("ARI_ecdc","ILI_ecdc","ILI_f
 #'Summarize symptom severity
 #'
 #'This function summarizes symptom severity by taking the highest symptom as ordered in \code{severity}.
-#' @param  severity character vector, symptoms ordered by increasing severity. Each symptoms must correspond to a logical variable in the weekly survey.
+#' @param  severity character vector, symptoms ordered by increasing severity. Each symptoms must correspond to a logical variable in the weekly survey. If the vector is (partially) named, availables names are used as the new labels for the severity.
 #' @inheritParams summarize_symptoms
 #' @export
 #' @import dplyr
 #' @seealso \code{\link{summarize_symptoms}}
 #' @return a \code{\link{flunet}} object with an additional - ordered - variable \code{symptom_severity} in the weekly survey.
-summarize_severity <- function(flunet, severity=c("ARI_ecdc","ILI_ecdc","ILI_fever")) {
+summarize_severity <- function(flunet, severity=c("ARI"="ARI_ecdc","ILI_no_fever"="ILI_ecdc","ILI_fever")) {
 
 	if(is_survey_present(flunet,survey="weekly",warning_message="severity won't be summarized")){
 		df_weekly <- flunet$surveys$weekly
 	} else {
 		return(flunet)
 	}
+	
+	if("symptom_severity"%in%names(df_weekly)){
+		warning("symptom severity is already present in the weekly survey and will be erased", call.=FALSE)
+		df_weekly$symptom_severity <- NULL	
+	}
 
-	var_ordered <- c(get_ordered_variables(df_weekly),list("symptom_severity"=severity))
+	if(is.null(x <- names(severity))){
+		# names equal value
+		names(severity) <- severity
+	} else if(any(x <- names(severity)=="")){
+		x <- which(x)
+		names(severity)[x] <- severity[x]
+	}
+
+	# swap names with value
+	labels_severity <- names(severity)
+	values_severity <- unname(severity) 
+
+	var_ordered <- c(get_ordered_variables(df_weekly),list("symptom_severity"=labels_severity))
 
 	# write info on the log
 	flunet$log$summarize_severity <- list("severity"=severity)
 
 	# keep only reports with symptoms in severity
-	any_severity <- paste(severity,collapse=" | ")	
+	any_severity <- paste(values_severity,collapse=" | ")	
 	df_summarize <- filter(df_weekly,eval(parse(text=any_severity),df_weekly))
 	df_keep <- anti_join(df_weekly,df_summarize,by=names(df_weekly))
 
-	severity_ordered <- ordered(severity)
+	severity_ordered <- factor(labels_severity,levels=labels_severity,ordered=TRUE)
 
-	df_summarize$symptom_severity <- apply(df_summarize[severity],1,function(x) {max_na(severity_ordered[as.logical(x)],na_rm=TRUE)})
+	df_summarize$symptom_severity <- apply(df_summarize[values_severity],1,function(x) {max_na(severity_ordered[as.logical(x)],na_rm=TRUE)})
 	
 	df_weekly <- rbind_list(df_summarize,df_keep) %>% arrange(person_id,comp_time)
 
