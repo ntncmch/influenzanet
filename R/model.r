@@ -1,0 +1,157 @@
+lme_boxcox <- function(df_reg, form, heteroscedasticity=NULL, range_response=c(-Inf, Inf), predict_all = TRUE, norm_test = TRUE, plot = TRUE) {
+
+	if(0){
+		library(car)
+		library(nlme)
+		require(nortest)
+		library(grid)
+		library(gridExtra)
+
+		# flunet <- readRDS(file.path(dir_pkg,"misc","flunet_summarized_cleaned_date_resolved_with_episode_empirical.rds"))	
+		df_intake <- flunet$surveys$intake
+		df_dist <- flunet$log$empirical_distributions$symptom_duration$distribution
+		df_reg <- inner_join(df_intake,df_dist,by="person_id") %>% mutate(symptom_duration=as.numeric(symptom_duration)+0.1, person_id=as.numeric(as.factor(person_id)), symptom_severity=factor(symptom_severity, ordered=FALSE))
+
+		form <- "symptom_duration~symptom_severity+age_group"
+		heteroscedasticity <- "age_group"
+		range_response <- c(0,20)
+		plot <- FALSE
+		norm_test <- FALSE
+
+	}
+
+	# extract response vs explanatory
+	my_formula <- formula(form)
+	response <- as.character(my_formula[[2]])
+	explanatory <- setdiff(all.vars(my_formula), response)
+
+	# select range of response
+	call <- substitute(filter(df_reg,response >= min_range & response <= max_range),list(response=as.name(response),min_range=min(range_response),max_range=max(range_response)))
+	df_reg <- eval(call)
+
+	# remove response and explanatory with NA
+	df_reg <- na.omit(df_reg[c("person_id",response,explanatory)])
+
+	# transform response
+	lm_bc <- powerTransform(formula(form), data = df_reg)
+	bc_coef <- lm_bc$roundlam[[1]]
+	df_reg[response] <- bcPower(df_reg[response], bc_coef)
+	inverse_transform <- inverse_bcPower(bc_coef)
+
+
+	# test normality
+	if(norm_test){
+		# test of distribution
+		n_var <- length(explanatory)
+		n_facet_x <- floor(n_var/2)
+		facet_x <- ifelse(n_facet_x,paste(explanatory[1:n_facet_x],collapse="+"),".")
+		facet_y <- paste(explanatory[(n_facet_x+1):n_var],collapse="+")
+		
+		dist_test <- dlply(df_reg, explanatory, function(df) {
+
+			x <- df[[response]]
+			p_val <- try(sf.test(x)$p)
+
+			best_fit <- data.frame(mean = mean(x), sd = sd(x),p_val=ifelse(inherits(p_val,"try-error"),NA,p_val) )
+			best_fit$accept_normality <- (best_fit$p_val>0.05)
+			best_fit$sample_size <- nrow(df)
+
+			p <- ggplot(df, aes_string(x = response))
+			p <- p + facet_grid(paste(facet_x,facet_y,sep="~"), scales = "free")				
+			p <- p + geom_histogram(aes(y = ..density..), position = "identity", binwidth = 0.25, alpha = 0.5)
+			p <- p + geom_density(alpha = 0.25)
+			p <- p + stat_function(fun = dnorm, args = list(mean = best_fit$mean, sd = best_fit$sd), colour = "red")
+			p <- p + xlab("") + ylab("") + theme_bw()
+
+			return(list(best_fit = best_fit, plot = p))
+			
+
+		}, .progress = "none")
+
+
+		plots <- llply(dist_test,function(x) {x$plot})	
+		plot_norm_test <- do.call(marrangeGrob,c(plots,list(nrow=2,ncol=2)))
+		if(plot){
+			print(plot_norm_test)
+		}
+
+		df_norm_test <- ldply(dist_test, function(x) x$best_fit)
+	} else {
+		plot_norm_test <- df_norm_test <- NULL
+	}
+
+
+	# regression
+	lm_reg <- gls(model=formula(form), data = df_reg)
+	lme_reg <- lme(fixed=formula(form),random=~1|person_id, data = df_reg) #,control=list(opt="optim")
+
+	# comparaison
+	print(x <- anova(lme_reg,lm_reg))
+	if(x[["p-value"]][2]<0.05){
+		model_reg <- lme_reg
+	} else {
+		model_reg <- lm_reg
+	}
+
+	# 
+	if(!is.null(heteroscedasticity)){
+		# lme_reg_hs <- my_update(lme_reg,weights=varIdent(form=formula(paste0("~1|",heteroscedasticity))), data = df_reg)
+		lme_reg_hs <- lme(fixed=formula(form),random=~1|person_id,weights=varIdent(form=formula(paste0("~1|",heteroscedasticity))), data = df_reg)
+		print(x <- anova(lme_reg,lme_reg_hs))
+		if(x[["p-value"]][2]<0.05){
+			model_reg <- lme_reg_hs
+		}
+		# heteroscedasticity
+		p_hs <- plot(x=lme_reg_hs,form=formula(paste0("resid(.,type=\"p\")~fitted(.)|",heteroscedasticity)),id=0.05,adj=-0.1)	
+		if(plot){
+			print(p_hs)
+		}
+		# message("OK")
+	} else {
+		p_hs <- NULL
+	}
+	
+	# assess fit, plot residuals
+	p_residuals <- plot(x=lme_reg_hs,form=formula(paste0("resid(.,type=\"p\")~fitted(.)|",paste(explanatory,collapse="*"))),id=0.05,adj=-0.1)	
+	p_qqnorm <- qqnorm(y=lme_reg_hs,form=formula(paste0("~resid(.)|",paste(explanatory,collapse="*"))),id=0.05,adj=-0.1)	
+	plot_residuals <- do.call(marrangeGrob,list(p_residuals,p_qqnorm,nrow=1,ncol=1))
+	# plot_residuals <- NULL
+	if(plot){
+		print(plot_residuals)
+	}
+
+	# outliers
+	df_reg$pearson_residuals <- resid(model_reg,type="p")
+	df_reg[[response]] <- inverse_transform(df_reg[[response]])
+
+	# prediction
+	new_data <- expand.grid(lapply(df_reg[explanatory],unique))
+	# if(inherits(model_reg,"gls")){
+		# new_data$prediction <- predict(model_reg,new_data)		
+	# } else {
+	new_data$prediction <- predict(model_reg,new_data,level=0)		
+	# }
+
+	design_matrix <- model.matrix(my_formula[-2], new_data) 
+	sd_mat <- model_reg[[ifelse(class(model_reg)=="gls","varBeta","varFix")]]
+	design_matrix <- design_matrix[,colnames(sd_mat)]
+	var_pred <- diag(design_matrix %*% sd_mat %*% t(design_matrix)) 
+
+	new_data$SE <- sqrt(var_pred) 
+	new_data$SE2 <- sqrt(var_pred + model_reg$sigma^2)
+	Q95 <- qnorm(0.975)
+	new_data_inverse_trans <- mutate(new_data,lower_conf= as.numeric(inverse_transform(prediction-Q95*SE)),upper_conf= as.numeric(inverse_transform(prediction+Q95*SE)),lower_pred= as.numeric(inverse_transform(prediction-Q95*SE2)),upper_pred= as.numeric(inverse_transform(prediction+Q95*SE2)),prediction=as.numeric(inverse_transform(prediction)))	
+
+	if(!predict_all){
+		df_pop_size <- unique(df_reg[explanatory])
+		df_pop_size$freq <- 1
+		new_data_inverse_trans <- left_join(new_data_inverse_trans, df_pop_size, by=explanatory)
+		new_data_inverse_trans[is.na(new_data_inverse_trans$freq),setdiff(names(new_data_inverse_trans),explanatory)] <- 0		
+		new_data_inverse_trans$freq <- NULL
+	}
+
+	return(list(model=model_reg,data=df_reg,bc_coef=bc_coef,prediction=new_data_inverse_trans,plot_heteroscedasticity=p_hs,plot_residuals=plot_residuals,norm_test=list(df=df_norm_test,plot=plot_norm_test)))
+}
+
+
+

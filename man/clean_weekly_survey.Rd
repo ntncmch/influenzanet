@@ -28,7 +28,7 @@ clean_weekly_survey(flunet, subset = NULL, lag_symptom_start = 2,
 a \code{flunet} object
 }
 \description{
-This function peforms several checks, resolves them when possible and otherwise flags informative warnings on the corresponding reports.
+This function performs several checks, resolves them when possible and otherwise flags informative warnings on the corresponding reports.
 }
 \note{
 The option \code{lag_symptom_start} allows us to group reports belonging to the same bout but having different symptom start dates. This happens when participant change their mind from one report to the next.

@@ -3,10 +3,11 @@
 \alias{summarize_severity}
 \title{Summarize symptom severity}
 \usage{
-summarize_severity(flunet, severity = c("ARI_ecdc", "ILI_ecdc", "ILI_fever"))
+summarize_severity(flunet, severity = c(ARI = "ARI_ecdc", ILI_no_fever =
+  "ILI_ecdc", "ILI_fever"))
 }
 \arguments{
-\item{severity}{character vector, symptoms ordered by increasing severity. Each symptoms must correspond to a logical variable in the weekly survey.}
+\item{severity}{character vector, symptoms ordered by increasing severity. Each symptoms must correspond to a logical variable in the weekly survey. If the vector is (partially) named, availables names are used as the new labels for the severity.}
 
 \item{flunet}{a \code{\link{flunet}} object}
 }

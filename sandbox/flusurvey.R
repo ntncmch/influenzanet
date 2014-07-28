@@ -1554,6 +1554,7 @@ compute_empirical_distribution_for_missing_data <- function(df_data, df_profile,
 		df2 <- data.frame(value=tmp$x,freq=tmp$y)
 		return(df2)
 	},.progress="text")
+	
 	df_dist_time_to_report_interp$type <- "interpolate"
 
 	df_dist_time_to_report <- do.call("rbind",list(df_dist_time_to_report_emp, df_dist_time_to_report_smooth, df_dist_time_to_report_interp))

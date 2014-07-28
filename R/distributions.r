@@ -117,6 +117,64 @@ empirical_distribution_time_to_report <- function(flunet, what=c("symptom_start"
 }
 
 
+predicted_distribution_symptom_duration <- function(flunet, form="symptom_duration~symptom_severity+age_group", heteroscedasticity="age_group", range_response=c(0, 20), remove_outliers= FALSE) {
+
+	if(0){
+		flunet <- readRDS(file.path(dir_pkg,"misc","flunet_summarized_cleaned_date_resolved_with_episode_empirical.rds"))
+		flunet <- summarize_UHC(flunet,definitions=c("any_UHC"))
+		flunet <- summarize_age(flunet,breaks=c(0,65,Inf), labels=c("0-64", "65+"))	
+		form <- "symptom_duration~symptom_severity+age_group"
+		heteroscedasticity <- "age_group"
+		range_response <- c(0,20)
+		remove_outliers <- FALSE
+		plot <- FALSE
+	}
+
+
+	# check empirical distribution
+	if(is.null(flunet$log$empirical_distributions$symptom_duration$distribution)){
+		stop("Empirical distribution need to be computed first. Have a look at the function ",sQuote("empirical_distribution_symptom_duration"), call.=FALSE)
+	}
+
+	df_intake <- flunet$surveys$intake
+	if(nrow(df_intake)!=n_distinct(df_intake$person_id)){
+		# TODO: roll up (ask Seb), think how to deal with that in nlme
+		warning("Force one profile per participant using the function ",sQuote("resolve_multiple_profiles"), call.=FALSE)
+		flunet <- resolve_multiple_profiles(flunet)
+		df_intake <- flunet$surveys$intake
+	}
+
+	# bind with intake survey
+	offset <- 0.1
+	df_dist <- flunet$log$empirical_distributions$symptom_duration$distribution
+	df_reg <- inner_join(df_intake,df_dist,by="person_id") %>% mutate(symptom_duration=as.numeric(symptom_duration)+offset, person_id=as.numeric(as.factor(person_id)), symptom_severity=factor(symptom_severity, ordered=FALSE))
+
+	ans <- lme_boxcox(df_reg, form=form, heteroscedasticity=heteroscedasticity, range_response=range_response, predict_all = TRUE, norm_test=TRUE, plot = FALSE)
+
+	if(remove_outliers){
+		df_reg <- ans$data %>% filter(pearson_residuals<2) %>% mutate(symptom_duration=inverse_transform(symptom_duration))
+		ans <- lme_boxcox(df_reg, form=form, heteroscedasticity=heteroscedasticity, range_response=range_response, predict_all = TRUE, norm_test=TRUE, plot = FALSE)
+	}
+	
+	# predicted distribution
+	my_formula <- as.formula(form)
+	response <- as.character(my_formula[[2]])
+	explanatory <- setdiff(all.vars(my_formula), response)
+
+	x <- 0:max(ans$data$symptom_duration - offset)
+	x_trans_up <- bcPower(x+offset+1, ans$bc_coef)
+	x_trans <- bcPower(x+offset, ans$bc_coef)
+
+	df_dist <- ddply(ans$prediction,explanatory,function(df){	
+		pred <- bcPower(df$prediction, ans$bc_coef)
+		px <- pnorm((x_trans_up-pred)/df$SE2)-pnorm((x_trans-pred)/df$SE2)
+		return(data.frame(symptom_duration=x,freq=px/sum(px)))
+	})
+
+	return(list(reg=ans,dist=df_dist))
+
+}
+
 # time to report vs wday for S_start, S_end. dateuration of symptom (by age and type of symptom). baseline heatl score.
 compute_empirical_distribution_for_missing_data <- function(
 	df_data, 

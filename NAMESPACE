@@ -3,6 +3,7 @@
 export(UHC_logical)
 export(cause_illness_7)
 export(change_routine_3)
+export(clean_intake_survey)
 export(clean_weekly_survey)
 export(count_same_bout)
 export(create_context_flusurvey_201213)
