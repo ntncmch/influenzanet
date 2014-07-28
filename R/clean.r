@@ -551,7 +551,7 @@ flag_warning <- function(df, df_weekly, df_warning) {
 
 #'Clean weekly survey
 #'
-#'This function peforms several checks, resolves them when possible and otherwise flags informative warnings on the corresponding reports.
+#'This function performs several checks, resolves them when possible and otherwise flags informative warnings on the corresponding reports.
 #' @param flunet a \code{\link{flunet}} object
 #' @param subset character, logical expression indicating reports to keep: missing values are taken as false. If present, only episode of illness with at least one report that verify \code{subset} will be processed. This is mainly to save time. E.g. to clean only episodes with at least one ARI report, one can uses \code{subset="ARI_ecdc"}.
 #' @param lag_symptom_start numeric, maximum number of days between two symptom start dates of different reports. Below this threshold, reports are considered to belong to the same episode of illness and are concatenated. 
@@ -871,6 +871,90 @@ clean_weekly_survey <- function(flunet, subset=NULL, lag_symptom_start = 2, dela
 	flunet$surveys$weekly <- set_ordered_variables(df_weekly,var_ordered)
 
 	return(flunet)
+}
+
+
+is_suspicious_age <- function(df_intake, age_max_children) {
+
+	return(with(df_intake, ((age >= 0 & age <= age_max_children) & ( smoke!="no" | !employment%in%c("student","home","none","other") | !is.na(occupation) ) )))
+
+}
+
+#'Clean intake survey
+#'
+#'This function performs several checks, resolves them when possible and otherwise flags informative warnings on the corresponding profiles.
+#' @param  age_max_children numeric. Upper age limit for children. Below this age, profile with "adult" behaviour (smoking, employment) are flagged as suspicious.
+#' @inheritParams clean_weekly_survey
+#' @export
+#' @import dplyr
+clean_intake_survey <- function(flunet, age_max_children=10) {
+
+	if(is_survey_present(flunet,survey="intake",warning_message="nothing to clean")){
+		df_intake <- flunet$surveys$intake
+	} else {
+		return(flunet)
+	}
+
+	W_AN <- c("W_age_negative","age of participant is negative")
+	W_AS <- c("W_age_suspicious","age of participant is suspicious")
+	
+	df_warnings <- as.data.frame(rbind(W_AN = W_AN, W_AS = W_AS),stringsAsFactors=FALSE)
+	names(df_warnings) <- c("name","description")
+	df_intake[df_warnings$name] <- FALSE
+
+	######################################################################################################################################################
+	#											remove missing person_id
+	######################################################################################################################################################	
+	df_intake <- filter(df_intake, person_id!="")
+
+	######################################################################################################################################################
+	#											clean age
+	######################################################################################################################################################	
+
+	# negative age should be NA
+	my_warning <- df_warnings["W_AN","name"]
+	ind <- with(df_intake,which((age < 0)))
+
+	if(length(ind)){
+		message(length(ind)," profiles with: ", df_warnings["W_AN","description"], "\n ==> flag with a warning.")
+		df_intake$age[ind] <- NA
+		df_intake[ind,my_warning] <- TRUE
+	}
+
+	# some participants lie on they age and pretend to be kids
+	# check whether they smoke, have an employment or an occupation. If so, put NA.
+	my_warning <- df_warnings["W_AS","name"]
+	if(any(x <- is_suspicious_age(df_intake, age_max_children))){
+		ind <- which(x)
+		message(length(ind)," profiles with: ", df_warnings["W_AS","description"], "\n ==> flag with a warning.")
+		df_intake$age[ind] <- NA
+		df_intake[ind,my_warning] <- TRUE
+	}	
+
+	# try to find suitable age
+	df_2clean <- filter(df_intake, W_age_negative | W_age_suspicious) %>% semi_join(df_intake,., by="person_id") %>% filter(!(W_age_negative | W_age_suspicious))
+	if(nrow(df_2clean)){
+		message(nrow(df_2clean)," profiles with a negative or suspicious age have another profile with a valid age.\n ==> fix age and remove warning")
+		df_replace <-  semi_join(df_intake,df_2clean, by="person_id") %>% group_by(person_id) %>% arrange(comp_time)  %>% summarize(correct_age=last_na(age, na_rm=TRUE))
+		df_clean <- inner_join(df_intake,df_replace,by="person_id") %>% mutate(age=correct_age)
+		df_clean[c("W_age_negative","W_age_suspicious")] <- FALSE
+		df_clean$correct_age <- NULL
+		df_keep <- anti_join(df_intake,df_clean,by="person_id")
+		df_intake <- rbind_list(df_keep, df_clean) %>% arrange(person_id, comp_time)
+	}
+
+	# write log
+	tmp <- rename(count(subset(melt(df_intake,measure.vars=df_warnings$name),value),vars="variable"),c("variable"="name"))
+	tmp <- mutate(tmp,name=as.character(name))
+	df_warnings <- left_join(df_warnings,tmp,by='name')
+
+	flunet$log$clean_intake_survey <- list("age_max_children"=age_max_children,"warnings"=df_warnings)
+
+	flunet$surveys$intake <- df_intake
+
+	return(flunet)
+
+
 }
 
 
