@@ -1,24 +1,36 @@
+#'Linear mixed effect model
+#'
+#'This function runs a linear mixed effect model on a boxcox normalised response value. It returns the fitted values (with confidence intervals) as well as several plots and data frames to check normality of the transformed variable as well as of the residuals.
+#' @param df_reg \code{data.frame}.
+#' @param form character, a formula.
+#' @param heteroscedasticity character, name of the variable used to adjust heteroscedasticity.
+#' @param range_response numeric vector, range of the response variable (before transformation) to include in the regression. 
+#' @param predict_all logical, if \code{TRUE} all covariate combinations are used for prediction (default). Otherwise, only covariate combinations with more than one participant are used.
+#' @param norm_test logical, if \code{TRUE} a normality test is performed on the transformed response variable.
+#' @param plot logical, if \code{TRUE} several check are plotted. All these plots are also returned.
+#' @note This function test successively a linear model (doesn't account for random effect at participant level), then a linear mixed effect model (with random effect at participant level) and finally add heteroscedasticity if passed as argument. Only the best model is returned (based on likelihood ratio test).
+#' @export
+#' @import dplyr ggplot2
+#' @importFrom car powerTransform bcPower
+#' @importFrom plyr dlply llply ldply
+#' @importFrom nortest sf.test
+#' @importFrom gridExtra marrangeGrob
+#' @importFrom nlme gls lme varIdent
+#' @return A list of 7 elements:
+#' \itemize{
+#' \item \code{model} either a \code{gls} or \code{lme} object
+#' \item \code{data} data used for regression, include residual. Response is not transformed.
+#' \item \code{bc_coef} boxcox coefficient
+#' \item \code{prediction} predicted median, confidence and predictive intervals for all covariate combinations
+#' \item \code{plot_heteroscedasticity} plot to check heteroscedasticity (only if \code{heteroscedasticity} is provided)
+#' \item \code{plot_residuals} plot to check the residuals
+#' \item \code{norm_test} A list of 2 elements (only if \code{norm_test} is provided):
+#' 	\itemize{
+#' 		\item \code{df} data frame with normality test results for all covariate group
+#' 		\item \code{plot} plot to check normality of the boxcox transformed response			
+#' 	}
+#' }
 lme_boxcox <- function(df_reg, form, heteroscedasticity=NULL, range_response=c(-Inf, Inf), predict_all = TRUE, norm_test = TRUE, plot = TRUE) {
-
-	if(0){
-		library(car)
-		library(nlme)
-		require(nortest)
-		library(grid)
-		library(gridExtra)
-
-		# flunet <- readRDS(file.path(dir_pkg,"misc","flunet_summarized_cleaned_date_resolved_with_episode_empirical.rds"))	
-		df_intake <- flunet$surveys$intake
-		df_dist <- flunet$log$empirical_distributions$symptom_duration$distribution
-		df_reg <- inner_join(df_intake,df_dist,by="person_id") %>% mutate(symptom_duration=as.numeric(symptom_duration)+0.1, person_id=as.numeric(as.factor(person_id)), symptom_severity=factor(symptom_severity, ordered=FALSE))
-
-		form <- "symptom_duration~symptom_severity+age_group"
-		heteroscedasticity <- "age_group"
-		range_response <- c(0,20)
-		plot <- FALSE
-		norm_test <- FALSE
-
-	}
 
 	# extract response vs explanatory
 	my_formula <- formula(form)
@@ -95,7 +107,7 @@ lme_boxcox <- function(df_reg, form, heteroscedasticity=NULL, range_response=c(-
 
 	# 
 	if(!is.null(heteroscedasticity)){
-		# lme_reg_hs <- my_update(lme_reg,weights=varIdent(form=formula(paste0("~1|",heteroscedasticity))), data = df_reg)
+		# lme_reg_hs <- update(model_reg,weights=varIdent(form=formula(paste0("~1|",heteroscedasticity))), data = df_reg)
 		lme_reg_hs <- lme(fixed=formula(form),random=~1|person_id,weights=varIdent(form=formula(paste0("~1|",heteroscedasticity))), data = df_reg)
 		print(x <- anova(lme_reg,lme_reg_hs))
 		if(x[["p-value"]][2]<0.05){
@@ -106,16 +118,18 @@ lme_boxcox <- function(df_reg, form, heteroscedasticity=NULL, range_response=c(-
 		if(plot){
 			print(p_hs)
 		}
-		# message("OK")
+		p_residuals <- plot(x=lme_reg_hs,form=formula(paste0("resid(.,type=\"p\")~fitted(.)|",paste(explanatory,collapse="*"))),id=0.05,adj=-0.1)
+		p_qqnorm <- qqnorm(y=lme_reg_hs,form=formula(paste0("~resid(.)|",paste(explanatory,collapse="*"))),id=0.05,adj=-0.1)	
+
+
 	} else {
 		p_hs <- NULL
+		p_residuals <- plot(x=lme_reg,form=formula(paste0("resid(.,type=\"p\")~fitted(.)|",paste(explanatory,collapse="*"))),id=0.05,adj=-0.1)
+		p_qqnorm <- qqnorm(y=lme_reg,form=formula(paste0("~resid(.)|",paste(explanatory,collapse="*"))),id=0.05,adj=-0.1)	
 	}
-	
-	# assess fit, plot residuals
-	p_residuals <- plot(x=lme_reg_hs,form=formula(paste0("resid(.,type=\"p\")~fitted(.)|",paste(explanatory,collapse="*"))),id=0.05,adj=-0.1)	
-	p_qqnorm <- qqnorm(y=lme_reg_hs,form=formula(paste0("~resid(.)|",paste(explanatory,collapse="*"))),id=0.05,adj=-0.1)	
+
 	plot_residuals <- do.call(marrangeGrob,list(p_residuals,p_qqnorm,nrow=1,ncol=1))
-	# plot_residuals <- NULL
+
 	if(plot){
 		print(plot_residuals)
 	}
@@ -126,11 +140,7 @@ lme_boxcox <- function(df_reg, form, heteroscedasticity=NULL, range_response=c(-
 
 	# prediction
 	new_data <- expand.grid(lapply(df_reg[explanatory],unique))
-	# if(inherits(model_reg,"gls")){
-		# new_data$prediction <- predict(model_reg,new_data)		
-	# } else {
 	new_data$prediction <- predict(model_reg,new_data,level=0)		
-	# }
 
 	design_matrix <- model.matrix(my_formula[-2], new_data) 
 	sd_mat <- model_reg[[ifelse(class(model_reg)=="gls","varBeta","varFix")]]

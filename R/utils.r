@@ -156,5 +156,13 @@ inverse_bcPower <- function(bc_coef){
 	}
 }
 
+#'Transform variable names for parsing
+#' @importFrom plyr revalue
+parsed_names <- function(x) {
+	return(suppressMessages(revalue(x,c("65+"=expression(paste("65+")),"ILI_no_fever"=expression(ILI[paste("no fever")]),"ILI_fever"=expression(ILI[fever])))))
+}
+
+
+
 
 
