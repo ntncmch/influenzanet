@@ -148,8 +148,13 @@ set_ordered_variables <- function(df, var_ordered) {
 	return(df)
 }
 
-
-
+inverse_bcPower <- function(bc_coef){
+	if(bc_coef!=0){
+		return(function(x){(x * bc_coef + 1)^(1/bc_coef)})
+	}else{
+		return(exp)
+	}
+}
 
 
 
