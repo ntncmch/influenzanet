@@ -133,14 +133,14 @@ rename_data<-function(df_data){
 #' @export
 #' @importFrom plyr arrange
 #'
-summarize_symptom<-function(df_data,symptom=c("ARI_ecdc","ILI_ecdc","ILI_fever"),CR_as_TRUE=FALSE,remove_original=FALSE){
+summarize_symptom2 <- function(df_data,symptom=c("ARI_ecdc","ILI_ecdc","ILI_fever"),CR_as_TRUE=FALSE,remove_original=FALSE){
 
 	#factor to logical
 	levels<-c("yes","no","CR")
 	labels<-c(TRUE,FALSE,CR_as_TRUE)
 	old_var<-c("sympt_sudden","fever_sudden")
 	new_var<-paste(old_var,"bool",sep="_")
-	df_data<-transform_factor(df_data, old_var, new_var,levels= levels,labels= labels, logical=T)
+	df_data <- transform_factor(df_data, old_var, new_var,levels= levels,labels= labels, logical=T)
 
 	#need to fix fever_sudden_bool==FALSE when fever==F & is.na(fever_sudden_bool)
 	df_data$fever_sudden_bool[is.na(df_data$fever_sudden_bool) & !df_data$fever]<-FALSE
@@ -1692,6 +1692,7 @@ compute_empirical_distribution_for_missing_data <- function(df_data, df_profile,
 	df_reg_baseline <- subset(df_reg_baseline, baseline_health_score<100) 
 
 	tmp <- lm_regression(df_reg_baseline, formula = "baseline_health_score~age_group2+smoke_bool+is_risk",transformation = "logit", max_response = 100, test_dist = T, CI_interval="prediction",suffix= "full_info",df_data= df_data,df_profile=df_profile,h_var="age_group2",x_var="is_risk",fill_var="smoke_bool",use_facet_wrap=T,facet_formula="~age_group2",return_outliers= remove_outlier) 
+	tmp <- lm_regression(df_reg_baseline, formula = "baseline_health_score~age_group2+smoke_bool+is_risk",transformation = "logit", max_response = 100, test_dist = T, CI_interval="prediction",suffix= "test_2014",df_data= df_data,df_profile=df_profile,h_var="age_group2",x_var="is_risk",fill_var="smoke_bool",use_facet_wrap=T,facet_formula="~age_group2",return_outliers= FALSE) 
 	if(remove_outlier){
 		df_remove <- match_df(df_reg_baseline, tmp,on=c("person_id"))
 		df_reg_baseline <- diff_df(df_reg_baseline, df_remove)
@@ -2826,229 +2827,209 @@ lm_regression <- function(df_reg, formula = "QALD_loss~symptom+age_group", trans
 			if(any(df_reg[,response]==100)){
 				shift_value <- min(c(1,min(df_reg[,response])))
 				df_reg[,response] <- df_reg[,response]-shift_value
-			}}
-			df_reg <- subset(df_reg, baseline_health_score<100)
-			x <- df_reg[,response]/100
-			df_reg[,response_trans] <- log(x) - log(1-x)
-			#test_bc <- sf.test(df_reg[,response_trans)$p
-			back_to_ori <- function(x){100*exp(x)/(exp(x)+1)+shift_value}
+			}
 		}
-
-		if(transformation=="test"){
-
-			x <- df_reg[,response]
-			x[x==100] <- max(x[x<100])
-			x <- x/(100-x)
-			df_reg[,response_trans] <- x
+		df_reg <- subset(df_reg, baseline_health_score<100)
+		x <- df_reg[,response]/100
+		df_reg[,response_trans] <- log(x) - log(1-x)
 			#test_bc <- sf.test(df_reg[,response_trans)$p
-			back_to_ori <- function(x){100*x/(1+x)}
-		}
+		back_to_ori <- function(x){100*exp(x)/(exp(x)+1)+shift_value}
+	}
 
+	if(transformation=="test"){
 
-		if(transformation=="log"){
-			df_reg[,response_trans] <- log(df_reg[,response])
+		x <- df_reg[,response]
+		x[x==100] <- max(x[x<100])
+		x <- x/(100-x)
+		df_reg[,response_trans] <- x
 			#test_bc <- sf.test(df_reg[,response_trans)$p
-			back_to_ori <- exp
-		}
-
-		p <- ggplot(df_reg, aes_string(x = response_trans, fill=x_var)) 
-		if(use_facet_wrap){
-			p <- p+facet_wrap(eval(parse(text=facet_formula)),...)		
-		}else if(use_facet_grid){
-			p <- p+facet_grid(eval(parse(text=facet_formula)),...)				
-		}	
-		p <- p + geom_histogram(aes(y = ..density..), position = "identity", alpha = 0.5)
-		p <- p + geom_density(alpha = 0.25) 
-		cairo_pdf(file.path(dir_res, paste0("data_histo_", transformation, ".pdf")), width = 8, height = 4)
-		print(p)
-		dev.off()
+		back_to_ori <- function(x){100*x/(1+x)}
+	}
 
 
-		if(test_dist){
+	if(transformation=="log"){
+		df_reg[,response_trans] <- log(df_reg[,response])
+			#test_bc <- sf.test(df_reg[,response_trans)$p
+		back_to_ori <- exp
+	}
+
+	p <- ggplot(df_reg, aes_string(x = response_trans, fill=x_var)) 
+	if(use_facet_wrap){
+		p <- p+facet_wrap(eval(parse(text=facet_formula)),...)		
+	}else if(use_facet_grid){
+		p <- p+facet_grid(eval(parse(text=facet_formula)),...)				
+	}	
+	p <- p + geom_histogram(aes(y = ..density..), position = "identity", alpha = 0.5)
+	p <- p + geom_density(alpha = 0.25) 
+	cairo_pdf(file.path(dir_res, paste0("data_histo_", transformation, ".pdf")), width = 8, height = 4)
+	print(p)
+	dev.off()
+
+
+	if(test_dist){
 			#test of distribution
-			require(nortest)
-			dist_test <- dlply(df_reg, explanatory, function(df) {
+		require(nortest)
+		dist_test <- dlply(df_reg, explanatory, function(df) {
 
-				tmp <- df[, response_trans]
-				p_val = try(sf.test(tmp)$p)
+			tmp <- df[, response_trans]
+			p_val = try(sf.test(tmp)$p)
 
-				best_fit <- data.frame(mean = mean(tmp), sd = sd(tmp),p_val=ifelse(inherits(p_val,"try-error"),NA,p_val) )
-				best_fit$normal<-(best_fit$p_val>0.05)
+			best_fit <- data.frame(mean = mean(tmp), sd = sd(tmp),p_val=ifelse(inherits(p_val,"try-error"),NA,p_val) )
+			best_fit$normal<-(best_fit$p_val>0.05)
 
-				best_fit$sample_size <- nrow(df)
-
-
+			best_fit$sample_size <- nrow(df)
 
 
-				p <- ggplot(df, aes_string(x = response_trans, fill=x_var)) 
-				if(use_facet_wrap){
-					p <- p+facet_wrap(eval(parse(text=facet_formula)),...)		
-				}else if(use_facet_grid){
-					p <- p+facet_grid(eval(parse(text=facet_formula)),...)				
-				}	
-
-				p <- p + geom_histogram(aes(y = ..density..), position = "identity", alpha = 0.5)
-				p <- p + geom_density(alpha = 0.25)
 
 
-				p <- p + stat_function(fun = dnorm, args = list(mean = best_fit$mean, sd = best_fit$sd), colour = "red")
+			p <- ggplot(df, aes_string(x = response_trans, fill=x_var)) 
+			if(use_facet_wrap){
+				p <- p+facet_wrap(eval(parse(text=facet_formula)),...)		
+			}else if(use_facet_grid){
+				p <- p+facet_grid(eval(parse(text=facet_formula)),...)				
+			}	
 
-				p <- p + scale_x_continuous("") + scale_y_continuous("")
-				return(list(best_fit = best_fit, plot = p))
+			p <- p + geom_histogram(aes(y = ..density..), position = "identity", alpha = 0.5)
+			p <- p + geom_density(alpha = 0.25)
 
 
-			}, .progress = "none")
+			p <- p + stat_function(fun = dnorm, args = list(mean = best_fit$mean, sd = best_fit$sd), colour = "red")
 
-			if(0){
-				library(grid)
-				cairo_pdf(file.path(dir_res, paste0("data_fit_",transformation, ".pdf")), width = 8, height = 8)
-				grid.newpage()
-				pushViewport(viewport(layout = grid.layout(n_row, n_col)))
-				for (i in 1:n_row) {
-					for (j in 1:n_col) {
-						if(i*j<=length(dist_test)){
-							print(dist_test[[i * j]]$plot, vp = vplayout(i, j))			
-						}
+			p <- p + scale_x_continuous("") + scale_y_continuous("")
+			return(list(best_fit = best_fit, plot = p))
+
+
+		}, .progress = "none")
+
+		if(0){
+			library(grid)
+			cairo_pdf(file.path(dir_res, paste0("data_fit_",transformation, ".pdf")), width = 8, height = 8)
+			grid.newpage()
+			pushViewport(viewport(layout = grid.layout(n_row, n_col)))
+			for (i in 1:n_row) {
+				for (j in 1:n_col) {
+					if(i*j<=length(dist_test)){
+						print(dist_test[[i * j]]$plot, vp = vplayout(i, j))			
 					}
 				}
-
-				dev.off()
 			}
 
-			all_best_fit <- ldply(dist_test, function(x) x$best_fit)
-
-			write.csv(all_best_fit, file = file.path(dir_res, "all_best_fit.csv"), quote = F, row.names = F)
+			dev.off()
 		}
+
+		all_best_fit <- ldply(dist_test, function(x) x$best_fit)
+
+		write.csv(all_best_fit, file = file.path(dir_res, "all_best_fit.csv"), quote = F, row.names = F)
+	}
 
 		#original lme
 		#lme_formula <- bc_formula
 		#lme_formula[[2]] <<- as.symbol(response_trans)
 
 		#	rhs_formula <- paste0("-1+",str_trim(extract_string(formula, "~", 2)))	
-		rhs_formula <- str_trim(extract_string(formula, "~", 2))
-		lm_formula <<- as.formula(paste(response_trans, rhs_formula,sep="~"))
+	rhs_formula <- str_trim(extract_string(formula, "~", 2))
+	lm_formula <<- as.formula(paste(response_trans, rhs_formula,sep="~"))
 
-		lm1 <- gls(model= lm_formula, data = df_reg)
+	lm1 <- gls(model= lm_formula, data = df_reg)
 
-		lm1_hetero <- update(lm1,weights=varIdent(form=as.formula(paste0("~1|",h_var))))
+	lm1_hetero <- update(lm1,weights=varIdent(form=as.formula(paste0("~1|",h_var))))
 
-		cat("#################################################\n")
-		cat("summary of lm1\n")	
-		print(summary(lm1))	
-		cat("#################################################\n")
-		cat("anova of lm1\n")		
-		print(anova(lm1))	
-		cat("#################################################\n")
-		cat("#################################################\n")
-		cat("#################################################\n")
-		cat("summary of lme1\n")	
-		print(summary(lm1_hetero))	
-		cat("#################################################\n")
-		cat("anova of lme1\n")		
-		print(anova(lm1_hetero))	
-		cat("#################################################\n")
-		cat("#################################################\n")
-		cat("#################################################\n")
-		cat("comparison of lm1_hetero with lm1\n")
-		try(print(anova(lm1_hetero,lm1)))
+	cat("#################################################\n")
+	cat("summary of lm1\n")	
+	print(summary(lm1))	
+	cat("#################################################\n")
+	cat("anova of lm1\n")		
+	print(anova(lm1))	
+	cat("#################################################\n")
+	cat("#################################################\n")
+	cat("#################################################\n")
+	cat("summary of lme1\n")	
+	print(summary(lm1_hetero))	
+	cat("#################################################\n")
+	cat("anova of lme1\n")		
+	print(anova(lm1_hetero))	
+	cat("#################################################\n")
+	cat("#################################################\n")
+	cat("#################################################\n")
+	cat("comparison of lm1_hetero with lm1\n")
+	try(print(anova(lm1_hetero,lm1)))
 
 		#write summary and anova lme2
-		tmp <- summary(lm1_hetero)
-		write.csv(tmp$tTable,file=file.path(dir_res,"lm1_hetero_tTable.csv"),row.names=T,quote=F)
-		write.csv(as.data.frame(anova(lm1_hetero)),file=file.path(dir_res,"lm1_hetero_anova.csv"),row.names=T,quote=F)
+	tmp <- summary(lm1_hetero)
+	write.csv(tmp$tTable,file=file.path(dir_res,"lm1_hetero_tTable.csv"),row.names=T,quote=F)
+	write.csv(as.data.frame(anova(lm1_hetero)),file=file.path(dir_res,"lm1_hetero_anova.csv"),row.names=T,quote=F)
 
-		if(0){
-			p <- plot(lm1_hetero,id=0.05,adj=-0.1)
-			cairo_pdf(file.path(dir_res, "check_plot.pdf"), width = 8, height = 8)
-			print(p)
-			dev.off()
-
-			#form <- paste0("",h_var)
-			p <- plot(lm1_hetero, form=resid(.,type="p")~fitted(.)|age_group2,id=0.05,adj=-0.1)
-			cairo_pdf(file.path(dir_res, "check_homoscedasticity.pdf"), width = 8, height = 8)
-			print(p)
-			dev.off()
-
-			form <- formula(paste0("resid(.,type=\"p\")~fitted(.)|",h_var))
-			p <- plot(x=lm1_hetero,form,id=0.05,adj=-0.1)	
-			pdf(file.path(dir_res, "check_heteroscedasticity.pdf"), width = 8, height = 8)
-			print(p)
-			dev.off()
-		}
-		df_reg$pearson_resid <- resid(lm1_hetero,type="p")
-		df_outlier <- subset(df_reg,abs(pearson_resid)>2)
-		cat(nrow(df_outlier),"outliers\n")	
-		response_var <- strsplit(formula,split="~")[[1]][1]
-
-		p <- ggplot(df_outlier,aes_string(x=response_var))+geom_histogram(binwidth=0.1)
-		pdf(file.path(dir_res, paste0("check_outliers_",response_var,".pdf")), width = 5, height = 5)
-		print(p)	
+	if(0){
+		p <- plot(lm1_hetero,id=0.05,adj=-0.1)
+		cairo_pdf(file.path(dir_res, "check_plot.pdf"), width = 8, height = 8)
+		print(p)
 		dev.off()
 
-		if(0){
-			form <- formula(paste0("resid(.,type=\"p\")~fitted(.)|",h_var))
-			p <- plot(lm1_hetero,form,id=0.05,adj=-0.1)
-			pdf(file.path(dir_res, "check_residuals.pdf"), width = 8, height = 8)
-			print(p)	
-			dev.off()
-		}
+			#form <- paste0("",h_var)
+		p <- plot(lm1_hetero, form=resid(.,type="p")~fitted(.)|age_group2,id=0.05,adj=-0.1)
+		cairo_pdf(file.path(dir_res, "check_homoscedasticity.pdf"), width = 8, height = 8)
+		print(p)
+		dev.off()
+
+		form <- formula(paste0("resid(.,type=\"p\")~fitted(.)|",h_var))
+		p <- plot(x=lm1_hetero,form,id=0.05,adj=-0.1)	
+		pdf(file.path(dir_res, "check_heteroscedasticity.pdf"), width = 8, height = 8)
+		print(p)
+		dev.off()
+	}
+	df_reg$pearson_resid <- resid(lm1_hetero,type="p")
+	df_outlier <- subset(df_reg,abs(pearson_resid)>2)
+	cat(nrow(df_outlier),"outliers\n")	
+	response_var <- strsplit(formula,split="~")[[1]][1]
+
+	p <- ggplot(df_outlier,aes_string(x=response_var))+geom_histogram(binwidth=0.1)
+	pdf(file.path(dir_res, paste0("check_outliers_",response_var,".pdf")), width = 5, height = 5)
+	print(p)	
+	dev.off()
+
+	if(0){
+		form <- formula(paste0("resid(.,type=\"p\")~fitted(.)|",h_var))
+		p <- plot(lm1_hetero,form,id=0.05,adj=-0.1)
+		pdf(file.path(dir_res, "check_residuals.pdf"), width = 8, height = 8)
+		print(p)	
+		dev.off()
+	}
 
 		#prediction
-		newdat <- expand.grid(lapply(df_reg[explanatory],unique))
-		newdat$pred <- predict(lm1_hetero,newdat)
+	newdat <- expand.grid(lapply(df_reg[explanatory],unique))
+	newdat$pred <- predict(lm1_hetero,newdat)
 
-		Designmat <- model.matrix(eval(eval(lm1_hetero$call$model)[-2]), newdat) 
-		Designmat <- Designmat[,colnames(lm1_hetero$varBeta)]
-		predvar <- diag(Designmat %*% lm1_hetero$varBeta %*% t(Designmat)) 
+	Designmat <- model.matrix(eval(eval(lm1_hetero$call$model)[-2]), newdat) 
+	Designmat <- Designmat[,colnames(lm1_hetero$varBeta)]
+	predvar <- diag(Designmat %*% lm1_hetero$varBeta %*% t(Designmat)) 
 
-		newdat$SE <- sqrt(predvar) 
-		newdat$SE2 <- sqrt(predvar+ lm1_hetero$sigma^2)
+	newdat$SE <- sqrt(predvar) 
+	newdat$SE2 <- sqrt(predvar+ lm1_hetero$sigma^2)
 
-		newdat <- mutate(newdat,original_pred=back_to_ori(pred),lower_conf= back_to_ori(pred-2*SE),upper_conf= back_to_ori(pred+2*SE),lower_pred= back_to_ori(pred-2*SE2),upper_pred= back_to_ori(pred+2*SE2))	
+	newdat <- mutate(newdat,original_pred=back_to_ori(pred),lower_conf= back_to_ori(pred-2*SE),upper_conf= back_to_ori(pred+2*SE),lower_pred= back_to_ori(pred-2*SE2),upper_pred= back_to_ori(pred+2*SE2))	
 
-		df_pop_size <- unique(df_reg[explanatory])
-		df_pop_size$freq <- 1
-		newdat <- join(newdat, df_pop_size)
-		newdat[is.na(newdat$freq),setdiff(names(newdat),explanatory)] <- 101
-		newdat["freq"] <- NULL
+	df_pop_size <- unique(df_reg[explanatory])
+	df_pop_size$freq <- 1
+	newdat <- join(newdat, df_pop_size)
+	newdat[is.na(newdat$freq),setdiff(names(newdat),explanatory)] <- 101
+	newdat["freq"] <- NULL
 
-		pd <- position_dodge(width=0.75)
-		ps <- position_stack(width=0,height=0)
-		if(CI_interval=="prediction"){
-			y_min <- "lower_pred"
-			y_max <- "upper_pred"
-		}
-		if(CI_interval=="confidence"){
-			y_min <- "lower_conf"
-			y_max <- "upper_conf"
-		}
+	pd <- position_dodge(width=0.75)
+	ps <- position_stack(width=0,height=0)
+	if(CI_interval=="prediction"){
+		y_min <- "lower_pred"
+		y_max <- "upper_pred"
+	}
+	if(CI_interval=="confidence"){
+		y_min <- "lower_conf"
+		y_max <- "upper_conf"
+	}
 
-		if(nrow(df_different_plot)){
+	if(nrow(df_different_plot)){
 
-			d_ply(df_different_plot,var_different_plot,function(df){
+		d_ply(df_different_plot,var_different_plot,function(df){
 
-				gdf <- match_df(newdat,df,on= var_different_plot)
-				p <- ggplot(gdf,aes_string(x=x_var,colour=fill_var))
-				if(use_facet_wrap){
-					p <- p+facet_wrap(eval(parse(text=facet_formula)),...)		
-				}else if(use_facet_grid){
-					p <- p+facet_grid(eval(parse(text=facet_formula)),...)				
-				}
-
-				p <- p+geom_point(aes(y= original_pred),position=pd,stat="identity",width=0.75,alpha=0.85)
-				p <- p+geom_linerange(aes_string(ymin=y_min,ymax=y_max),position=pd,width=0.5)
-
-				p <- p+scale_colour_brewer(fill_var,palette="Dark2")
-				p <- p+xlab(x_var)+ylab(response_var)
-				pdf_file <- paste0("lm_",CI_interval,"_",paste(paste(names(df),df,sep="="),collapse="_"),".pdf")
-				cairo_pdf(file.path(dir_res,pdf_file),width=7,height=4)
-				print(p)
-				dev.off()
-
-			},.progress="text")
-
-		}else{
-			gdf <- newdat
+			gdf <- match_df(newdat,df,on= var_different_plot)
 			p <- ggplot(gdf,aes_string(x=x_var,colour=fill_var))
 			if(use_facet_wrap){
 				p <- p+facet_wrap(eval(parse(text=facet_formula)),...)		
@@ -3059,151 +3040,172 @@ lm_regression <- function(df_reg, formula = "QALD_loss~symptom+age_group", trans
 			p <- p+geom_point(aes(y= original_pred),position=pd,stat="identity",width=0.75,alpha=0.85)
 			p <- p+geom_linerange(aes_string(ymin=y_min,ymax=y_max),position=pd,width=0.5)
 
-	#p <- p+geom_text(aes(label=paste("n =",freq),y=max(upper_conf)*1.1+as.numeric(smoke_bool)/5),size=3)
-			p <- p+ scale_colour_brewer(fill_var,palette="Dark2")
-	#p <- p+scale_colour_brewer("age group",palette="Dark2")#+theme(legend.position="none")
+			p <- p+scale_colour_brewer(fill_var,palette="Dark2")
 			p <- p+xlab(x_var)+ylab(response_var)
-			pdf_file <- paste0("lm_",CI_interval,".pdf")
+			pdf_file <- paste0("lm_",CI_interval,"_",paste(paste(names(df),df,sep="="),collapse="_"),".pdf")
 			cairo_pdf(file.path(dir_res,pdf_file),width=7,height=4)
 			print(p)
 			dev.off()
 
+		},.progress="text")
+
+	}else{
+		gdf <- newdat
+		p <- ggplot(gdf,aes_string(x=x_var,colour=fill_var))
+		if(use_facet_wrap){
+			p <- p+facet_wrap(eval(parse(text=facet_formula)),...)		
+		}else if(use_facet_grid){
+			p <- p+facet_grid(eval(parse(text=facet_formula)),...)				
 		}
 
+		p <- p+geom_point(aes(y= original_pred),position=pd,stat="identity",width=0.75,alpha=0.85)
+		p <- p+geom_linerange(aes_string(ymin=y_min,ymax=y_max),position=pd,width=0.5)
 
-#compute other statistics in the original space: mean, mode etc
-		if(transformation=="log"){
-			sigma<-summary(lme2)$sigma
-			newdat$mean<-exp(newdat$pred+sigma^2/2)
-			newdat$mode<-exp(newdat$pred-sigma^2)		
-		}
+	#p <- p+geom_text(aes(label=paste("n =",freq),y=max(upper_conf)*1.1+as.numeric(smoke_bool)/5),size=3)
+		p <- p+ scale_colour_brewer(fill_var,palette="Dark2")
+	#p <- p+scale_colour_brewer("age group",palette="Dark2")#+theme(legend.position="none")
+		p <- p+xlab(x_var)+ylab(response_var)
+		pdf_file <- paste0("lm_",CI_interval,".pdf")
+		cairo_pdf(file.path(dir_res,pdf_file),width=7,height=4)
+		print(p)
+		dev.off()
 
-
-		if(transformation=="boxcox"){
-			sigma<-summary(lme2)$sigma
-			bound <- 1/(sigma*coef_bc)+newdat$pred/sigma
-			newdat$bound <- bound
-			newdat$norm <- pnorm(bound)
-			newdat <-ddply(newdat, explanatory,function(df){
-		#compute sample size
-				tmp <- match_df(df_reg,df,on= explanatory)
-				df$sample_size <- nrow(tmp)
-		#compute mean
-				tmp <- integrate(PN_integrand,lower=-1/coef_bc,upper=Inf,mu=df$pred,sigma=sigma,lambda=coef_bc,K=df$norm,r=1)
-				df$mean <- tmp$value
-				df$abs_error_mean <- tmp$abs.error
-				df$PN_lower_95 <- PN_quantile(p=1-0.95^(1/df$sample_size),mu=df$pred,sigma=sigma,lambda=coef_bc,K=df$norm)				
-				df$PN_upper_95 <- PN_quantile(p=0.95^(1/df$sample_size),mu=df$pred,sigma=sigma,lambda=coef_bc,K=df$norm)			
-				return(df)
-			})
-		}
-
-
-		write.csv(newdat, file = file.path(dir_res, "prediction.csv"), quote = F, row.names = F)
-
-		if(return_outliers){
-			return(df_outlier)			
-		}else{
-	#return bc transform + 
-			return(list(coef_bc=ifelse(transformation=="boxcox",coef_bc,0),prediction=newdat))
-		}
 	}
 
 
-	glm_regression <- function(df_reg, formula = "QALD_loss~symptom+age_group+vaccine+gender+gender:age_group:pregnant+age_group:smoke", family = "Gamma", link = "log", max_response = 10, model_selection = F, test_dist = F, ...) {
+#compute other statistics in the original space: mean, mode etc
+	if(transformation=="log"){
+		sigma<-summary(lme2)$sigma
+		newdat$mean<-exp(newdat$pred+sigma^2/2)
+		newdat$mode<-exp(newdat$pred-sigma^2)		
+	}
 
 
-		dir_res <- file.path(PDF, formula, family, link)
-		dir.create(path = dir_res, recu = T)
+	if(transformation=="boxcox"){
+		sigma<-summary(lme2)$sigma
+		bound <- 1/(sigma*coef_bc)+newdat$pred/sigma
+		newdat$bound <- bound
+		newdat$norm <- pnorm(bound)
+		newdat <-ddply(newdat, explanatory,function(df){
+		#compute sample size
+			tmp <- match_df(df_reg,df,on= explanatory)
+			df$sample_size <- nrow(tmp)
+		#compute mean
+			tmp <- integrate(PN_integrand,lower=-1/coef_bc,upper=Inf,mu=df$pred,sigma=sigma,lambda=coef_bc,K=df$norm,r=1)
+			df$mean <- tmp$value
+			df$abs_error_mean <- tmp$abs.error
+			df$PN_lower_95 <- PN_quantile(p=1-0.95^(1/df$sample_size),mu=df$pred,sigma=sigma,lambda=coef_bc,K=df$norm)				
+			df$PN_upper_95 <- PN_quantile(p=0.95^(1/df$sample_size),mu=df$pred,sigma=sigma,lambda=coef_bc,K=df$norm)			
+			return(df)
+		})
+	}
 
-		n_row <- length(levels(df_reg$age_group))
-		n_col <- length(levels(df_reg$symptom))
 
-		require(stringr)
-		glm_formula <- formula(formula)
+	write.csv(newdat, file = file.path(dir_res, "prediction.csv"), quote = F, row.names = F)
 
-		response <- str_trim(extract_string(formula, "~", 1))
-		explanatory <- setdiff(all.vars(glm_formula), response)
+	if(return_outliers){
+		return(df_outlier)			
+	}else{
+	#return bc transform + 
+		return(list(coef_bc=ifelse(transformation=="boxcox",coef_bc,0),prediction=newdat))
+	}
+}
+
+
+glm_regression <- function(df_reg, formula = "QALD_loss~symptom+age_group+vaccine+gender+gender:age_group:pregnant+age_group:smoke", family = "Gamma", link = "log", max_response = 10, model_selection = F, test_dist = F, ...) {
+
+
+	dir_res <- file.path(PDF, formula, family, link)
+	dir.create(path = dir_res, recu = T)
+
+	n_row <- length(levels(df_reg$age_group))
+	n_col <- length(levels(df_reg$symptom))
+
+	require(stringr)
+	glm_formula <- formula(formula)
+
+	response <- str_trim(extract_string(formula, "~", 1))
+	explanatory <- setdiff(all.vars(glm_formula), response)
 
 	#transform ordered factor
-		df_reg[explanatory] <- lapply(df_reg[explanatory], function(x) {
-			if (is.ordered(x)) {
-				x <- factor(x, ordered = F)
-			}
-			x
-		})
-
-		if ("pregnant" %in% explanatory) {
-
-			df_reg$pregnant[is.na(df_reg$pregnant)] <- FALSE
-
+	df_reg[explanatory] <- lapply(df_reg[explanatory], function(x) {
+		if (is.ordered(x)) {
+			x <- factor(x, ordered = F)
 		}
+		x
+	})
+
+	if ("pregnant" %in% explanatory) {
+
+		df_reg$pregnant[is.na(df_reg$pregnant)] <- FALSE
+
+	}
 
 	#plot data
 	#boxplot
-		p <- ggplot(df_reg, aes_string(x = "age_group", y = response)) + facet_wrap(~symptom, scales = "free_y", ncol = n_col)
-		p <- p + geom_boxplot() + ylim(c(0, max_response))
+	p <- ggplot(df_reg, aes_string(x = "age_group", y = response)) + facet_wrap(~symptom, scales = "free_y", ncol = n_col)
+	p <- p + geom_boxplot() + ylim(c(0, max_response))
 	#p<-p+geom_violin()+ylim(c(0,20))
-		cairo_pdf(file.path(dir_res, "data_boxplot.pdf"), width = 8, height = 4)
-		print(p)
-		dev.off()
+	cairo_pdf(file.path(dir_res, "data_boxplot.pdf"), width = 8, height = 4)
+	print(p)
+	dev.off()
 
 	#distribution
-		p <- ggplot(df_reg, aes_string(x = response)) + facet_grid(age_group ~ symptom, scales = "free")
-		p <- p + geom_histogram(aes(y = ..density..), position = "identity", binwidth = 0.25, alpha = 0.5)
-		p <- p + geom_density(alpha = 0.25) + xlim(c(0, max_response))
-		cairo_pdf(file.path(dir_res, "data_histo_original.pdf"), width = 8, height = 4)
-		print(p)
-		dev.off()
+	p <- ggplot(df_reg, aes_string(x = response)) + facet_grid(age_group ~ symptom, scales = "free")
+	p <- p + geom_histogram(aes(y = ..density..), position = "identity", binwidth = 0.25, alpha = 0.5)
+	p <- p + geom_density(alpha = 0.25) + xlim(c(0, max_response))
+	cairo_pdf(file.path(dir_res, "data_histo_original.pdf"), width = 8, height = 4)
+	print(p)
+	dev.off()
 
-		p <- ggplot(df_reg, aes_string(x = paste0("log(", response, ")"))) + facet_grid(age_group ~ symptom, scales = "free")
-		p <- p + geom_histogram(aes(y = ..density..), position = "identity", binwidth = 0.25, alpha = 0.5)
-		p <- p + geom_density(alpha = 0.25)
-		cairo_pdf(file.path(dir_res, paste0("data_histo_", link, ".pdf")), width = 8, height = 4)
-		print(p)
-		dev.off()
+	p <- ggplot(df_reg, aes_string(x = paste0("log(", response, ")"))) + facet_grid(age_group ~ symptom, scales = "free")
+	p <- p + geom_histogram(aes(y = ..density..), position = "identity", binwidth = 0.25, alpha = 0.5)
+	p <- p + geom_density(alpha = 0.25)
+	cairo_pdf(file.path(dir_res, paste0("data_histo_", link, ".pdf")), width = 8, height = 4)
+	print(p)
+	dev.off()
 
-		if(test_dist){
+	if(test_dist){
 		#test of distribution
-			require(robustloggamma)
-			require(nortest)
-			dist_test <- dlply(df_reg, c("symptom", "age_group"), function(df) {
+		require(robustloggamma)
+		require(nortest)
+		dist_test <- dlply(df_reg, c("symptom", "age_group"), function(df) {
 
-				x <- df[, response]
-				link_response <- paste(link, response, sep = "_")
+			x <- df[, response]
+			link_response <- paste(link, response, sep = "_")
 
-				if (link == "log") {
-					df[, link_response] <- log(x)
+			if (link == "log") {
+				df[, link_response] <- log(x)
 
-				}
+			}
 
-				if (family == "Gamma" & link == "log") {
-					tmp <- loggammarob(df[, link_response, drop = T], control = loggammarob.control(lower = 0, upper = 2, n = 30))
-					best_fit <- data.frame(mu = tmp$mu, sigma = tmp$sigma, lambda = tmp$lambda )
-				}
+			if (family == "Gamma" & link == "log") {
+				tmp <- loggammarob(df[, link_response, drop = T], control = loggammarob.control(lower = 0, upper = 2, n = 30))
+				best_fit <- data.frame(mu = tmp$mu, sigma = tmp$sigma, lambda = tmp$lambda )
+			}
 
-				if (family == "gaussian") {
-					tmp <- df[, link_response]
-					best_fit <- data.frame(mean = mean(tmp), sd = sd(tmp), p_val = sf.test(tmp)$p)
-					best_fit$normal<-(best_fit$p_val>0.05)
-				}
+			if (family == "gaussian") {
+				tmp <- df[, link_response]
+				best_fit <- data.frame(mean = mean(tmp), sd = sd(tmp), p_val = sf.test(tmp)$p)
+				best_fit$normal<-(best_fit$p_val>0.05)
+			}
 
-				best_fit$sample_size <- nrow(df)
+			best_fit$sample_size <- nrow(df)
 
-				p <- ggplot(df, aes_string(x = link_response)) + facet_grid(age_group ~ symptom, scales = "free")
-				p <- p + geom_histogram(aes(y = ..density..), position = "identity", binwidth = 0.25, alpha = 0.5)
-				p <- p + geom_density(alpha = 0.25)
-				if (family == "Gamma" & link == "log") {
-					p <- p + stat_function(fun = dloggamma, args = list(mu = best_fit$mu, sigma = best_fit$sigma, lambda = best_fit$lambda), 
-						colour = "red")
-				}
-				if (family == "gaussian") {
-					p <- p + stat_function(fun = dnorm, args = list(mean = best_fit$mean, sd = best_fit$sd), colour = "red")
-				}
-				p <- p + scale_x_continuous("") + scale_y_continuous("")
+			p <- ggplot(df, aes_string(x = link_response)) + facet_grid(age_group ~ symptom, scales = "free")
+			p <- p + geom_histogram(aes(y = ..density..), position = "identity", binwidth = 0.25, alpha = 0.5)
+			p <- p + geom_density(alpha = 0.25)
+			if (family == "Gamma" & link == "log") {
+				p <- p + stat_function(fun = dloggamma, args = list(mu = best_fit$mu, sigma = best_fit$sigma, lambda = best_fit$lambda), 
+					colour = "red")
+			}
+			if (family == "gaussian") {
+				p <- p + stat_function(fun = dnorm, args = list(mean = best_fit$mean, sd = best_fit$sd), colour = "red")
+			}
+			p <- p + scale_x_continuous("") + scale_y_continuous("")
 
-				return(list(best_fit = best_fit, plot = p))
-			}, .progress = "text")
+			return(list(best_fit = best_fit, plot = p))
+		}, .progress = "text")
 
 library(grid)
 cairo_pdf(file.path(dir_res, paste0("data_fit_", family, "_on_", link, ".pdf")), width = 8, height = 8)
@@ -5341,6 +5343,9 @@ plot_symptom_cloud <- function(df_data,symptoms,labels,dir_pdf){
 
 data_processing <- function(SD_max=30,fun_summary_baseline=c("median","mean")){
 
+	if(0){
+		fun_summary_baseline <- "median"
+	}
 	fun_summary_baseline <- match.arg(fun_summary_baseline)
 
 	if(0){
@@ -5461,5 +5466,5 @@ main<-function(){
 
 }
 
-main()
+# main()
 
