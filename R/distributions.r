@@ -147,40 +147,138 @@ predicted_distribution_symptom_duration <- function(flunet, form="symptom_durati
 	# bind with intake survey
 	offset <- 0.1
 	df_dist <- flunet$log$empirical_distributions$symptom_duration$distribution
-	df_reg <- inner_join(df_intake,df_dist,by="person_id") %>% mutate(symptom_duration=as.numeric(symptom_duration)+offset, person_id=as.numeric(as.factor(person_id)), symptom_severity=factor(symptom_severity, ordered=FALSE))
+	df_reg <- inner_join(df_intake,df_dist,by="person_id") %>% mutate(symptom_duration=as.numeric(symptom_duration)+offset, person_id=as.numeric(as.factor(person_id)))
 
-	ans <- lme_boxcox(df_reg, form=form, heteroscedasticity=heteroscedasticity, range_response=range_response, predict_all = TRUE, norm_test=TRUE, plot = FALSE)
-
-	if(remove_outliers){
-		df_reg <- ans$data %>% filter(pearson_residuals<2)
-		ans <- lme_boxcox(df_reg, form=form, heteroscedasticity=heteroscedasticity, range_response=range_response, predict_all = TRUE, norm_test=TRUE, plot = FALSE)
-	}
-	
-	# predicted distribution
+	# transform variables
 	my_formula <- as.formula(form)
 	response <- as.character(my_formula[[2]])
 	explanatory <- setdiff(all.vars(my_formula), response)
 
-	x <- 0:max(ans$data$symptom_duration - offset)
-	x_trans_up <- bcPower(x+offset+1, ans$bc_coef)
-	x_trans <- bcPower(x+offset, ans$bc_coef)
+	if("symptom_severity"%in%explanatory){
+		df_reg <- mutate(df_reg,symptom_severity=factor(symptom_severity,ordered=FALSE))
+	}
+
+	if("age_group"%in%explanatory){
+		df_reg <- mutate(df_reg,age_group=factor(age_group,ordered=FALSE))
+	}
+
+	ans <- suppressMessages(lme_transform(df_reg, form=form, trans="boxcox",heteroscedasticity=heteroscedasticity, range_response=range_response, predict_all = TRUE, norm_test=TRUE, plot = plot))
+
+	if(remove_outliers){
+		df_reg <- ans$data %>% filter(pearson_residuals<2)
+		ans <- suppressMessages(lme_transform(df_reg, form=form, trans="boxcox", heteroscedasticity=heteroscedasticity, range_response=range_response, predict_all = TRUE, norm_test=TRUE, plot = plot))
+	}
+	
+	# remove offset
+	ans$data <- mutate(ans$data,symptom_duration=symptom_duration - offset)	
+	
+	# predicted distribution
+	x <- 0:max(ans$data$symptom_duration)
+	x_trans_up <- ans$fun_transform(x+offset+1)
+	x_trans <- ans$fun_transform(x+offset)
 
 	df_dist <- ddply(ans$prediction,explanatory,function(df){	
-		pred <- bcPower(df$prediction, ans$bc_coef)
+		pred <- ans$fun_transform(df$prediction)
 		px <- pnorm((x_trans_up-pred)/df$SE2)-pnorm((x_trans-pred)/df$SE2)
 		return(data.frame(symptom_duration=x,freq=px/sum(px)))
 	})
 
-	# plot distribution
-	gdf <- df_dist %>% mutate(symptom_severity=parsed_names(symptom_severity),age_group=parsed_names(age_group))
-	p <- ggplot(gdf)+facet_grid(age_group~symptom_severity,labeller=label_parsed)
-	p <- p + geom_bar(aes(x=symptom_duration,y=freq),stat="identity")
-	p <- p + ylab("Probability") + xlab("Symptom duration (in days)")
-	p <- p + theme_bw()
-	if(plot){
-		print(p)		
+	flunet$log$predicted_distribution$symptom_duration <- list(form=form,heteroscedasticity=heteroscedasticity,range_response=range_response,remove_outliers=remove_outliers,reg=ans,dist=df_dist)
+
+	return(flunet)
+}
+
+
+# plot_dist <- function(df,x,y,facets=NULL,alpha=1) {
+
+# 	df <- prepare_parsing(df)
+
+# 	p <- ggplot(df)
+# 	if(!is.null(facet)){
+# 		p <- p + do.call(facet_grid,list(facets=facets,labeller="label_parsed"))
+# 	}
+# 	if(!(is.null(colour) & is.null(linetype))){
+# 		my_aes <- do.call(aes,list(x=as.name(x),y=as.name(y),colour=as.name(colour),linetype=as.name(linetype)))
+# 		p <- p + do.call(geom_step,list(mapping=my_aes,alpha=alpha,stat="identity",position="identity"))	
+# 	} else {
+# 		p <- p + geom_bar(aes(x=symptom_duration,y=freq),stat="identity",position="identity")
+# 	}	
+# 	if(!is.null(colour)){
+# 		if(is.null(names(colour))){
+# 			names(colour) <- colour	
+# 		}
+# 		p <- p + scale_colour_hue(names(colour))		
+# 	}
+# 	if(!is.null(linetype)){
+# 		if(is.null(names(linetype))){
+# 			names(linetype) <- linetype	
+# 		}
+# 		p <- p + scale_linetype(names(linetype))		
+# 	}
+# 	p <- p + ylab("Probability") + xlab("Symptom duration (in days)")
+# 	p <- p + theme_bw()
+# 	p <- p+theme(legend.background=element_rect(fill=NA,size=NA),legend.position="top",legend.direction="horizontal")
+# 	if(plot){
+# 		print(p)		
+# 	}
+# }
+
+predicted_distribution_baseline_healthscore <- function(flunet, form="baseline_health_score~age_group+smoke+any_UHC", heteroscedasticity="age_group", remove_outliers= FALSE, plot = FALSE) {
+
+	df_intake <- flunet$surveys$intake
+
+	if(is.null(df_intake$baseline_health_score)){
+		stop("Empirical distribution need to be computed first. Have a look at the function ",sQuote("summarize_baseline_health_score"), call.=FALSE)
 	}
 
-	return(list(reg=ans,dist=df_dist,plot=p))
+	if(nrow(df_intake)!=n_distinct(df_intake$person_id)){
+		# TODO: roll up (ask Seb), think how to deal with that in nlme
+		warning("Force one profile per participant using the function ",sQuote("resolve_multiple_profiles"), call.=FALSE)
+		flunet <- resolve_multiple_profiles(flunet)
+		df_intake <- flunet$surveys$intake
+	}
 
+	df_intake <- filter(df_intake,!is.na(baseline_health_score) & baseline_health_score<100)
+
+	# if values 0 or 100, need an offset
+	x <- df_intake$baseline_health_score
+	df_intake$baseline_health_score[x<1] <- 1
+	offset <- ifelse(any(x==100,na.rm=TRUE),0.5,0)
+
+	df_reg <- mutate(df_intake,baseline_health_score=(baseline_health_score-offset)/100, person_id=as.numeric(as.factor(person_id)))
+
+	# transform variables
+	my_formula <- as.formula(form)
+	response <- as.character(my_formula[[2]])
+	explanatory <- setdiff(all.vars(my_formula), response)
+
+	if("age_group"%in%explanatory){
+		df_reg <- mutate(df_reg,age_group=factor(age_group,ordered=FALSE))
+	}
+
+	range_response <- c(0, 1)
+	ans <- suppressMessages(lme_transform(df_reg, form=form, trans="logit",heteroscedasticity=heteroscedasticity, range_response=range_response, predict_all = TRUE, norm_test=TRUE, plot = plot))
+
+	if(remove_outliers){
+		df_reg <- ans$data %>% filter(pearson_residuals<2)
+		ans <- suppressMessages(lme_transform(df_reg, form=form, trans="logit",heteroscedasticity=heteroscedasticity, range_response=range_response, predict_all = TRUE, norm_test=TRUE, plot = plot))
+	}
+
+	ans$data <- mutate(ans$data,baseline_health_score=baseline_health_score*100+offset)
+
+	# predicted distribution
+	x <- seq(floor(min(ans$data$baseline_health_score)),99.5,0.5)
+
+	x_trans_up <- ans$fun_transform((x-offset+0.5)/100)
+	x_trans <- ans$fun_transform((x-offset)/100)
+
+	df_dist <- ddply(ans$prediction,explanatory,function(df){	
+		pred <- ans$fun_transform(df$prediction)
+		px <- pnorm((x_trans_up-pred)/df$SE2)-pnorm((x_trans-pred)/df$SE2)
+		return(data.frame(baseline_health_score=x,freq=px/sum(px)))
+	})
+
+	flunet$log$predicted_distribution$baseline_health_score <- list(form=form,heteroscedasticity=heteroscedasticity,range_response=range_response,remove_outliers=remove_outliers,reg=ans,dist=df_dist)
+
+	return(flunet)
 }
