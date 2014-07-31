@@ -79,14 +79,6 @@ count_same_bout <- function(df_weekly, CR_as_TRUE = FALSE, give_position = FALSE
 #' @importFrom plyr dlply
 find_bout_cluster <- function(df_weekly, lag_symptom_start = 2) {
 
-	if(0){
-
-		x <- df_weekly_cluster %>% filter(!is.na(bout_cluster)) %>% select(person_id,n_bout,bout_cluster) %>% head
-
-		df_weekly <- filter(df_weekly_cluster,person_id=="111ee99d-da2a-48c0-a2f0-676a16c967a1")
-
-	}
-
 	if(n_distinct(df_weekly$person_id)>1){
 		stop(sQuote("df_weekly")," argument contains more than one person id.",call.=FALSE)
 	}
@@ -249,18 +241,6 @@ clean_same_bout <- function(df, delay_in_reporting, my_warning, debug) {
 #' @importFrom doParallel registerDoParallel
 #' @importFrom plyr ddply
 define_same_bout <- function(df_weekly, subset = NULL, lag_symptom_start = 2, delay_in_reporting = 10, CR_as_TRUE = FALSE, my_warning="W_same_S_start_diff_bout",debug=FALSE, debug_id=NULL , n_cores=1) {
-
-	if(0){
-		df_weekly <- df_weekly
-		subset <- "ARI_ecdc"
-		lag_symptom_start <- 2
-		delay_in_reporting <- 10
-		CR_as_TRUE <- FALSE
-		my_warning <- "W_same_S_start_diff_bout"
-		debug <- FALSE
-		debug_id <- "0941a0d9-c6ff-407b-a340-4432a7f32dca"
-		n_cores <- NULL
-	}
 
 	if(is.null(n_cores)){
 		n_cores <- round(detectCores()/2)
@@ -570,17 +550,6 @@ flag_warning <- function(df, df_weekly, df_warning) {
 #' @note The option \code{lag_symptom_start} allows us to group reports belonging to the same bout but having different symptom start dates. This happens when participant change their mind from one report to the next.
 #' @return a \code{flunet} object
 clean_weekly_survey <- function(flunet, subset=NULL, lag_symptom_start = 2, delay_in_reporting = 10, CR_as_TRUE = FALSE, plot_check = FALSE,  n_cores=1, debug = FALSE) {
-
-	if(0){
-		flunet <- flunet
-		subset <- "ARI_ecdc"
-		lag_symptom_start <- 2
-		delay_in_reporting <- 10
-		CR_as_TRUE <- FALSE
-		plot_check <- FALSE
-		n_cores <- NULL
-		debug <- FALSE
-	}
 
 	stopifnot(is.logical(CR_as_TRUE),is.logical(plot_check),is.logical(debug))
 
