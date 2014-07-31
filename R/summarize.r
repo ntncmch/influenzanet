@@ -246,13 +246,8 @@ summarize_baseline_health_score <- function(flunet, fun_summarize=median) {
 		stop("Argument ",sQuote("fun_summarize")," is not an R function.",call.=FALSE)
 	}
 
-	if(is_survey_present(flunet,survey="weekly",warning_message="baseline health score won't be summarized")){
+	if(is_survey_present(flunet,survey=c("intake","weekly"),warning_message="baseline health score won't be summarized")){
 		df_weekly <- flunet$surveys$weekly
-	} else {
-		return(flunet)
-	}
-
-	if(is_survey_present(flunet,survey="intake",warning_message="baseline health score won't be summarized")){
 		df_intake <- flunet$surveys$intake
 	} else {
 		return(flunet)
