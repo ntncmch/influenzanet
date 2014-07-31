@@ -119,8 +119,8 @@ summarize_severity <- function(flunet, severity=c("ARI"="ARI_ecdc","ILI_no_fever
 #'Summarize underlying health conditions
 #'
 #'This function summarizes the underlying health conditions of every participant according to \code{definitions}
-#' @param flunet a \code{\link{flunet}} object
 #' @param definitions character vector, one or more definitions to summarize underlying health conditions. See note below.
+#' @inheritParams summarize_symptoms
 #' @note \code{any_UHC} stands for any underlying health conditions.
 #' @export
 summarize_UHC <- function(flunet, definitions=c("any_UHC")) {
@@ -131,6 +131,11 @@ summarize_UHC <- function(flunet, definitions=c("any_UHC")) {
 		df_intake <- flunet$surveys$intake
 	} else {
 		return(flunet)
+	}
+
+	if(any(x <- definitions%in%names(df_intake))){
+		warning(sQuote(definitions[x])," already present in the intake survey and will be erased", call.=FALSE)
+		df_intake[definitions[x]] <- NULL	
 	}
 
 	# write info on the log
@@ -151,6 +156,46 @@ summarize_UHC <- function(flunet, definitions=c("any_UHC")) {
 	return(flunet)
 }
 
+#'Summarize smoking habits
+#'
+#'This function summarizes the smoking habits of participants by creating new variables.
+#' @param new_var character vector, new variables created to summarize smoking habits. See note below.
+#' @inheritParams summarize_symptoms
+#' @note The following summary variables are currently available:
+#' \itemize{
+#' 	\item \code{"smoke_bool"} is a logical variable that indicates whether participant is a smoker or not.
+#' }
+#' @export
+#' @import dplyr
+#' @importFrom plyr revalue
+summarize_smoke <- function(flunet, new_var = c("smoke_bool")) {
+
+	new_var <- match.arg(new_var,several.ok=TRUE)
+
+	if(is_survey_present(flunet,survey="intake",warning_message="smoke won't be summarized")){
+		df_intake <- flunet$surveys$intake
+	} else {
+		return(flunet)
+	}
+
+	if("smoke_bool"%in%new_var){
+		df_intake <- mutate(df_intake,smoke_bool=as.logical(revalue(smoke, c(
+			"no" = "FALSE", 
+			"occasionally" = "TRUE",
+			"<10_per_day" = "TRUE",
+			">10_per_day" = "TRUE",
+			"unknown" = "NA")))
+		)
+	}
+
+	flunet$surveys$intake <- df_intake
+
+	return(flunet)
+
+}
+
+
+
 #'Summarize age
 #'
 #'This function summarizes the age of every participant with age groups. It's mainly a wrapper aroud \code{\link[base]{cut}}.
@@ -169,6 +214,11 @@ summarize_age <- function(flunet, breaks, labels = NULL, include.lowest = TRUE, 
 		return(flunet)
 	}
 	
+	if("age_group"%in%names(df_intake)){
+		warning("age group is already present in the intake survey and will be erased", call.=FALSE)
+		df_intake$age_group <- NULL	
+	}
+
 	df_intake <- mutate(df_intake, age_group = cut(age, breaks = breaks, labels=labels, include.lowest=include.lowest, right=right, ordered_result=ordered_result, ...))
 
 	# write info on the log
@@ -200,6 +250,18 @@ summarize_baseline_health_score <- function(flunet, fun_summarize=median) {
 		df_weekly <- flunet$surveys$weekly
 	} else {
 		return(flunet)
+	}
+
+	if(is_survey_present(flunet,survey="intake",warning_message="baseline health score won't be summarized")){
+		df_intake <- flunet$surveys$intake
+	} else {
+		return(flunet)
+	}
+
+	if("baseline_health_score"%in%names(df_intake)){
+		warning("baseline health score is already present in the intake survey and will be erased", call.=FALSE)
+		flunet$surveys$intake$baseline_health_score <- NULL	
+		df_intake <- flunet$surveys$intake
 	}
 
 	# write info on the log
@@ -266,8 +328,15 @@ summarize_episode <- function(flunet) {
 	is_bool <- vapply(df_weekly[var_names], function(x) all(is.logical(x)),logical(1))
 	var_bool <- var_names[is_bool]
 
+	# some variables should be negative when any of the other is positive (med_no, visit_no)
+	var_bool_no <- var_bool[str_detect(var_bool,"\\b.+_no\\b")]
+	var_bool <- setdiff(var_bool,var_bool_no)
+
 	summarize_bool <- paste0("any_na(",var_bool,",na_rm=TRUE)")
 	names(summarize_bool) <- var_bool
+
+	summarize_bool_no <- paste0("all_na(",var_bool_no,",na_rm=TRUE)")
+	names(summarize_bool_no) <- var_bool_no
 
 	# ordered variables
 	var_names <- setdiff(var_names,var_bool)
@@ -282,7 +351,7 @@ summarize_episode <- function(flunet) {
 	names(summarize_ordered_max) <- var_ordered_max
 
 	# all summarize
-	summarize_all <- c(summarize_manually,summarize_bool,summarize_ordered_min,summarize_ordered_max)
+	summarize_all <- c(summarize_manually,summarize_bool,summarize_bool_no,summarize_ordered_min,summarize_ordered_max)
 
 	# summarize
 	# keep only reports belonging to a bout and put them in the right order
@@ -311,23 +380,30 @@ summarize_episode <- function(flunet) {
 
 	# all episodes with non-NA time_[visit,phone]_* must have [visit,phone]_* equal to TRUE
 	var_time <- str_detect_multi_pattern(names(df_episode),c("time_visit","time_phone"),expression="regexp",value=TRUE)
-	var_bool <- extract_string(var_time,"time_",2)
-	mutate_bool <- paste0(var_bool," | !is.na(",var_time,")")
-	names(mutate_bool) <- var_bool
-	call_mutate <- parse(text=sprintf("mutate(df_episode,%s)",paste(paste(names(mutate_bool),mutate_bool,sep="="),collapse=",")))
+	var_bool_time <- extract_string(var_time,"time_",2)
+	mutate_bool_time <- paste0(var_bool_time," | !is.na(",var_time,")")
+	names(mutate_bool_time) <- var_bool_time
+	call_mutate <- parse(text=sprintf("mutate(df_episode,%s)",paste(paste(names(mutate_bool_time),mutate_bool_time,sep="="),collapse=",")))
 	df_episode <-  eval(call_mutate)
 
 	# logical variable *_no should be consistent
+	# browser()
+	# print(var_bool)
 	mutate_bool <- NULL
-	for(x in c("visit","phone")){
+	for(x in c("visit_","phone_","med_")){
 
-		var_no <- paste(x,"no",sep="_")
-		var <- grep(x, var_bool,value=TRUE)
+		var_no <- paste0(x,"no")
+		var <- setdiff(grep(x, var_bool,value=TRUE),var_no)
+		# print(var)
 		mutate_var <- paste0("(",paste0(var,collapse=" | "),")")
+		# print(mutate_var)
 		names(mutate_var) <- var_no
 		mutate_bool <- c(mutate_bool,mutate_var)
 	}
-	call_mutate <- parse(text=sprintf("mutate(df_episode,%s)",paste(paste(names(mutate_bool),mutate_bool,sep="="),collapse=",")))
+	# call_filter <- parse(text=sprintf("filter(df_episode,%s)",paste(paste(names(mutate_bool),mutate_bool,sep="=="),collapse=" | ")))
+	# df <- eval(call_filter)	
+	call_mutate <- parse(text=sprintf("mutate(df_episode,%s)",paste(paste(names(mutate_bool),mutate_bool,sep="=!"),collapse=",")))
+	# print(call_mutate)
 	df_episode <-  eval(call_mutate)
 
 
