@@ -12,6 +12,8 @@ lme_transform(df_reg, form, trans = c("none", "boxcox", "logit"),
 
 \item{form}{character, a formula.}
 
+\item{trans}{character, the trnasformation used to normalize the response variable. Default to "none" but "boxcox" and "logit" are available.}
+
 \item{heteroscedasticity}{character, name of the variable used to adjust heteroscedasticity.}
 
 \item{range_response}{numeric vector, range of the response variable (before transformation) to include in the regression. Bounds are not included.}

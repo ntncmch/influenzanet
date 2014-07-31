@@ -5,6 +5,9 @@
 \usage{
 inverse_boxcox_transform(bc_coef)
 }
+\arguments{
+\item{bc_coef}{boxcox coefficient}
+}
 \description{
 Inverse boxcox transformation
 }

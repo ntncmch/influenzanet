@@ -3,6 +3,7 @@
 #'This function runs a linear mixed effect model on a boxcox normalised response value. It returns the fitted values (with confidence intervals) as well as several plots and data frames to check normality of the transformed variable as well as of the residuals.
 #' @param df_reg \code{data.frame}.
 #' @param form character, a formula.
+#' @param trans character, the trnasformation used to normalize the response variable. Default to "none" but "boxcox" and "logit" are available.
 #' @param heteroscedasticity character, name of the variable used to adjust heteroscedasticity.
 #' @param range_response numeric vector, range of the response variable (before transformation) to include in the regression. Bounds are not included. 
 #' @param predict_all logical, if \code{TRUE} all covariate combinations are used for prediction (default). Otherwise, only covariate combinations with more than one participant are used.

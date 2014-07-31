@@ -165,7 +165,18 @@ unorder_variables <- function(df,var_ordered) {
 }
 
 
+
+#'Boxcox transformation
+#' @param bc_coef boxcox coefficient 
+#' @importFrom car bcPower
+boxcox_transform <- function(bc_coef){
+
+	return(function(x) {bcPower(x,bc_coef)})
+
+}
+
 #'Inverse boxcox transformation
+#' @inheritParams boxcox_transform
 inverse_boxcox_transform <- function(bc_coef){
 	if(bc_coef!=0){
 		return(function(x){(x * bc_coef + 1)^(1/bc_coef)})
@@ -174,15 +185,10 @@ inverse_boxcox_transform <- function(bc_coef){
 	}
 }
 
-#'Boxcox transformation
-#' @importFrom car bcPower
-boxcox_transform <- function(bc_coef){
 
-	return(function(x) {bcPower(x,bc_coef)})
-
-}
-
-#'Transform variable names for parsing
+#'Transform variable values into names for parsing
+#' @param x a vector of values to be renamed.
+#' @param  var_TRUE,var_FALSE if \code{x} is logical, these are names to replace \code{TRUE} and \code{FALSE} values.
 #' @importFrom plyr revalue
 parsed_names <- function(x, var_TRUE=NULL, var_FALSE=NULL) {
 	x <- as.factor(as.character(x))
