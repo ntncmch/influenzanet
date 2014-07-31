@@ -148,7 +148,8 @@ set_ordered_variables <- function(df, var_ordered) {
 	return(df)
 }
 
-inverse_bcPower <- function(bc_coef){
+#'Inverse boxcox transformation
+inverse_boxcox_transform <- function(bc_coef){
 	if(bc_coef!=0){
 		return(function(x){(x * bc_coef + 1)^(1/bc_coef)})
 	}else{
@@ -156,11 +157,66 @@ inverse_bcPower <- function(bc_coef){
 	}
 }
 
+#'Boxcox transformation
+#' @importFrom car bcPower
+boxcox_transform <- function(bc_coef){
+
+	return(function(x) {bcPower(x,bc_coef)})
+
+}
+
 #'Transform variable names for parsing
 #' @importFrom plyr revalue
-parsed_names <- function(x) {
-	return(suppressMessages(revalue(x,c("65+"=expression(paste("65+")),"ILI_no_fever"=expression(ILI[paste("no fever")]),"ILI_fever"=expression(ILI[fever])))))
+parsed_names <- function(x, var_TRUE=NULL, var_FALSE=NULL) {
+	x <- as.factor(as.character(x))
+	return(suppressMessages(revalue(x,c(
+		"TRUE"=paste0("paste(\"",var_TRUE,"\")"),
+		"FALSE"=paste0("paste(\"",var_FALSE,"\")"),
+		"65+"=expression(paste("65+")),
+		"ILI_no_fever"=expression(ILI[paste("no fever")]),
+		"ILI_fever"=expression(ILI[fever])
+		)))
+	)
 }
+
+prepare_parsing <- function(df,vars) {
+
+	for(var in vars){
+
+		if(var=="symptom_severity"){
+			df <- mutate(df,symptom_severity=factor(parsed_names(symptom_severity),levels=parsed_names(levels(symptom_severity))))
+		}
+
+		if(var=="age_group"){
+			df <- mutate(df,age_group=parsed_names(age_group))
+		}
+
+		if(var=="any_UHC"){
+			df <- mutate(df,any_UHC=parsed_names(any_UHC,var_TRUE="any UHC",var_FALSE="no UHC"))
+		}	
+
+		if(var=="smoke_bool"){
+			df <- mutate(df,smoke_bool=parsed_names(smoke_bool,var_TRUE="smoker",var_FALSE="non smoker"))
+		}	
+
+	}
+
+	return(df)
+}
+
+
+id_transform <- function(x) {
+	return(x)
+}
+
+logit_transform <- function(x) {
+	return(log(x) - log(1-x))
+}
+
+inverse_logit_transform <- function(x) {
+	return(exp(x)/(exp(x)+1))
+}
+
 
 
 
