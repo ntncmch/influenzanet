@@ -6,9 +6,9 @@
 summarize_UHC(flunet, definitions = c("any_UHC"))
 }
 \arguments{
-\item{flunet}{a \code{\link{flunet}} object}
-
 \item{definitions}{character vector, one or more definitions to summarize underlying health conditions. See note below.}
+
+\item{flunet}{a \code{\link{flunet}} object}
 }
 \description{
 This function summarizes the underlying health conditions of every participant according to \code{definitions}

@@ -3,7 +3,7 @@
 \alias{parsed_names}
 \title{Transform variable names for parsing}
 \usage{
-parsed_names(x)
+parsed_names(x, var_TRUE = NULL, var_FALSE = NULL)
 }
 \description{
 Transform variable names for parsing
