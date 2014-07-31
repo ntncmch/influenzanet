@@ -136,7 +136,6 @@ lme_transform <- function(df_reg, form, trans=c("none","boxcox","logit"), hetero
 		}
 	} 
 
-
 	# plots
 	some_plots <- plot_lme(model_reg, heteroscedasticity, plot)
 
