@@ -118,7 +118,7 @@ is_survey_present <- function(flunet, survey, warning_message="") {
 	missing_survey <- setdiff(survey,names(flunet$surveys))
 
 	if(length(missing_survey)){
-		warnings(sQuote("flunet")," object doesn't contain ",sQuote(missing_survey)," survey(s) ",warning_message,call.=FALSE)
+		warning(sQuote("flunet")," object doesn't contain ",sQuote(missing_survey)," survey(s) ",warning_message,call.=FALSE)
 		return(FALSE)
 	}
 
@@ -141,12 +141,29 @@ get_ordered_variables <- function(df) {
 
 set_ordered_variables <- function(df, var_ordered) {
 
+	if(length(var_ordered)==0){
+		return(df)
+	}
+
 	mutate_ordered <- paste0("ordered(",names(var_ordered),",levels=",var_ordered,")")
 	names(mutate_ordered) <- names(var_ordered)
 	call_mutate <- parse(text=sprintf("mutate(df,%s)",paste(paste(names(mutate_ordered),mutate_ordered,sep="="),collapse=",")))	
 	df <- eval(call_mutate)
 	return(df)
 }
+
+unorder_variables <- function(df,var_ordered) {
+
+	if(length(var_ordered)==0){
+		return(df)
+	}
+	mutate_ordered <- paste0("factor(",names(var_ordered),",levels=",var_ordered,",ordered=FALSE)")
+	names(mutate_ordered) <- names(var_ordered)
+	call_mutate <- parse(text=sprintf("mutate(df,%s)",paste(paste(names(mutate_ordered),mutate_ordered,sep="="),collapse=",")))	
+	df <- eval(call_mutate)
+	return(df)
+}
+
 
 #'Inverse boxcox transformation
 inverse_boxcox_transform <- function(bc_coef){
