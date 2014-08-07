@@ -758,7 +758,7 @@ clean_weekly_survey <- function(flunet, subset=NULL, lag_symptom_start = 2, dela
 	df_weekly <- mutate(df_weekly,previous_position_bout=c(NA,position_bout[-nrow(df_weekly)]))
 
 	#find all person_id
-	df_end_previous <- filter(df_weekly,!is.na(position_bout) & position_bout==length_bout & (is.na(previous_position_bout) | position_bout!=previous_position_bout) & !is.na(previous_person_id) & person_id==previous_person_id & !is.na(previous_n_bout) & n_bout==previous_n_bout & !is.na(symptom_end) & symptom_end<previous_report_date & !eval(parse(text=my_warning),df_weekly))
+	df_end_previous <- filter(df_weekly,!is.na(position_bout) & position_bout==length_bout & (is.na(previous_position_bout) | length_bout==1 | position_bout!=previous_position_bout) & !is.na(previous_person_id) & person_id==previous_person_id & ((!is.na(previous_n_bout) & n_bout==previous_n_bout) | length_bout==1) & !is.na(symptom_end) & symptom_end<previous_report_date & !eval(parse(text=my_warning),df_weekly))
 	
 	df_weekly <- flag_warning(df_end_previous, df_weekly, df_warnings["W_SEBPR",])
 	
