@@ -1,5 +1,6 @@
 ^\.travis\.yml$
 ^/\.gitignore$
 sandbox
+misc
 influenzanet.sublime-project
 influenzanet.sublime-workspace
