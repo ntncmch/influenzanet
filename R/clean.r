@@ -1034,6 +1034,8 @@ resolve_multiple_profiles <- function(flunet){
 		return(flunet)
 	}
 
+	var_ordered <- get_ordered_variables(df_intake)
+
 	#order by date of compilation
 	df_intake <- arrange(df_intake,comp_time)
 
@@ -1074,7 +1076,7 @@ resolve_multiple_profiles <- function(flunet){
 	
 	df_intake <- rbind_list(df_keep, df_clean) %>% arrange(comp_time)
 
-	flunet$surveys$intake <- df_intake
+	flunet$surveys$intake <- set_ordered_variables(df_intake,var_ordered)
 
 	return(flunet)
 }
