@@ -1,1 +1,5 @@
 ^\.travis\.yml$
+^/\.gitignore$
+sandbox
+influenzanet.sublime-project
+influenzanet.sublime-workspace
