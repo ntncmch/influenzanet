@@ -1,3 +1,4 @@
+[![Build Status](https://travis-ci.org/ntncmch/influenzanet.svg?branch=master)](https://travis-ci.org/ntncmch/influenzanet)
 influenzanet
 ============
 
