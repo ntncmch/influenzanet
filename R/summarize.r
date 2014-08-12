@@ -308,9 +308,9 @@ summarize_episode <- function(flunet) {
 			report_date = c(first_report_date = "first_na(report_date)", last_report_date = "last_na(report_date)"),
 			symptom_start = c(symptom_start="first_na(symptom_start)"),
 			symptom_end = c(symptom_end="last_na(symptom_end)"),
-			length_bout = c(length_bout = "last(length_bout)"),
-			still_ill = c(still_ill = "last(still_ill)"),
-			still_off = c(still_off = "last(still_off)"),
+			length_bout = c(length_bout = "last_na(length_bout)"),
+			still_ill = c(still_ill = "last_na(still_ill)"),
+			still_off = c(still_off = "last_na(still_off)"),
 			health_score = c(median_health_score = "median(health_score,na.rm=TRUE)",min_health_score = "min(health_score,na.rm=TRUE)")
 			)
 		summarize_manually <- c(summarize_manually,x)		
