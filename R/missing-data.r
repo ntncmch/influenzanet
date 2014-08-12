@@ -239,7 +239,7 @@ sample_missing_symptom_start_end_dates <- function(flunet, symptom_duration, tim
 		df_missing_start_missing_end$max_time_to_report_start_date[is.na(tmp)] <- Inf
 		
 		# remove episodes that were reported after recovery
-		df_not_sampled <- filter(df_missing_start_missing_end,length_bout==1 & (!still_ill | (!is.na(symptom_end) & symptom_end<first_report_date)))
+		df_not_sampled <- filter(df_missing_start_missing_end,length_bout==1 & (!still_ill | (!is.na(symptom_end) & symptom_end<first_report_date)))
 		
 		df_missing_start_missing_end <- anti_join(df_missing_start_missing_end, df_not_sampled, by=names(df_missing_start_missing_end))
 
