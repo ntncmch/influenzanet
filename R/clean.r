@@ -567,6 +567,7 @@ clean_weekly_survey <- function(flunet, subset=NULL, lag_symptom_start = 2, dela
 	W_SETF <- c("W_S_end_too_far","time to report the symptom end date is greater than max delay_in_reporting")
 	W_SSBPR <- c("W_S_start_before_previous_report","symptom start date is before the previous report")
 	W_SEBPR <- c("W_S_end_before_previous_report","symptom end date is before the previous report")
+	W_CPE <- c("W_complete_past_episode","both start and end dates are reported after completion")
 	W_SSASE <- c("W_S_start_after_S_end","symptom start date is after the symptom end date")
 	W_SSW <- c("W_S_start_wrong","symptom start date is after the report date")
 	W_SEW <- c("W_S_end_wrong","symptom end date is after the report date")
@@ -575,7 +576,7 @@ clean_weekly_survey <- function(flunet, subset=NULL, lag_symptom_start = 2, dela
 	W_SSSBDB <- c("W_same_S_start_diff_bout","several episodes have a symptom start date within lag_symptom_start")
 	W_MISC <- c("W_misc","miscellaneous warnings such as unrealistic values, i.e. health-score < 0 or > 100")
 
-	df_warnings <- as.data.frame(rbind(W_SSCY = W_SSCY, W_SSTF = W_SSTF, W_SETF = W_SETF, W_SSBPR= W_SSBPR, W_SEBPR= W_SEBPR, W_SSASE= W_SSASE, W_SSW = W_SSW, W_SEW = W_SEW, W_SBBDSS = W_SBBDSS, W_SBBDSE = W_SBBDSE, W_SSSBDB = W_SSSBDB, W_MISC = W_MISC),stringsAsFactors=FALSE)
+	df_warnings <- as.data.frame(rbind(W_SSCY = W_SSCY, W_SSTF = W_SSTF, W_SETF = W_SETF, W_SSBPR= W_SSBPR, W_SEBPR= W_SEBPR, W_CPE=W_CPE, W_SSASE= W_SSASE, W_SSW = W_SSW, W_SEW = W_SEW, W_SBBDSS = W_SBBDSS, W_SBBDSE = W_SBBDSE, W_SSSBDB = W_SSSBDB, W_MISC = W_MISC),stringsAsFactors=FALSE)
 	names(df_warnings) <- c("name","description")
 	df_weekly[df_warnings$name] <- FALSE
 
@@ -744,9 +745,9 @@ clean_weekly_survey <- function(flunet, subset=NULL, lag_symptom_start = 2, dela
 		previous_n_bout=c(NA,n_bout[-nrow(df_weekly)])
 		)
 
-	# find all person_id
+	# find all person_id, multiple report are handled implicitely by n_bout!=previous_n_bout (so only first of multiple reports is tested)
 	df_start_previous <- filter(df_weekly,!is.na(position_bout) & position_bout==1 & !is.na(previous_person_id) & person_id==previous_person_id & (is.na(previous_n_bout) | n_bout!=previous_n_bout) & !is.na(symptom_start) & symptom_start<previous_report_date & !eval(parse(text=my_warning),df_weekly))
-	
+
 	df_weekly <- flag_warning(df_start_previous, df_weekly, df_warnings["W_SSBPR",])
 	
 
@@ -757,13 +758,23 @@ clean_weekly_survey <- function(flunet, subset=NULL, lag_symptom_start = 2, dela
 	df_weekly <- arrange(df_weekly,person_id,comp_time)
 	df_weekly <- mutate(df_weekly,previous_position_bout=c(NA,position_bout[-nrow(df_weekly)]))
 
-	#find all person_id
-	df_end_previous <- filter(df_weekly,!is.na(position_bout) & position_bout==length_bout & (is.na(previous_position_bout) | length_bout==1 | position_bout!=previous_position_bout) & !is.na(previous_person_id) & person_id==previous_person_id & ((!is.na(previous_n_bout) & n_bout==previous_n_bout) | length_bout==1) & !is.na(symptom_end) & symptom_end<previous_report_date & !eval(parse(text=my_warning),df_weekly))
-	
+	#find all person_id, account for multiple reports
+	df_end_previous <- filter(df_weekly,!is.na(position_bout) & position_bout==length_bout & (is.na(previous_position_bout) | length_bout==1 | position_bout!=previous_position_bout) & !is.na(previous_person_id) & person_id==previous_person_id & ((!is.na(previous_n_bout) & n_bout==previous_n_bout) | length_bout==1) & previous_report_date!=report_date & !is.na(symptom_end) & symptom_end < previous_report_date & !eval(parse(text=my_warning),df_weekly))
+ 
 	df_weekly <- flag_warning(df_end_previous, df_weekly, df_warnings["W_SEBPR",])
 	
 	# remove intermediate variables	
 	df_weekly <- df_weekly[setdiff(names(df_weekly),paste("previous",c("report_date","n_bout","person_id","position_bout"),sep="_"))]
+
+
+	######################################################################################################################################################
+	#														check: past episode\n
+	######################################################################################################################################################
+	
+	# TODO
+	# df_data <- transform(df_data, W_past_episode_full = (length_bout %in% c(1) & !is.na(symptom_start) & !is.na(symptom_end) & 
+	# 	symptom_start <= symptom_end & symptom_start < report_date & symptom_end < report_date & still_ill %in% 
+	# 	c(F)))
 
 	######################################################################################################################################################
 	#														check: symptom_start > report_date\n
