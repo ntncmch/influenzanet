@@ -155,15 +155,22 @@ sample_one_missing_date_using_symptom_duration <- function(df_one,df_dist,type=c
 	return(df_one)
 }
 
-#'Sample missing symptom start/end dates
+#'Sample missing and warning symptom start/end dates
 #'
-#'This function sample missing symptom start and end dates using a distribution of the duration of symptoms
-#' @param  symptom_duration distribution
-#' @param  time_to_report distributions
-#' @param  sample_warning_start vector
-#' @param  sample_warning_end vector
+#'This function sample missing or warning symptom start and end dates using a distribution for the duration of symptoms as well as a distribution for the time to report symptom onset. 
+#' The distribution of symptom duration can be provided with covariates. If so, the sampling distribution will chosen by matching the covariates to those of the participant/episode.
+#' Sampling proceeds in 3 steps:
+#' \enumerate{
+#' 	\item Sample missing or warning start dates for episodes having a valid end date. This is done by sampling from the distribution of symptom duration, truncated according to the time of the reports (for instance symptoms duration must exceed the time from the first report to the symptom end date). Then start date is set as end date minus symptom duration.
+#' 	\item Sample missing or warning start dates for episodes having a missing or warning end date. This is done by sampling from the distribution of time to report the start date (if \code{time_to_report} is not null), truncated according to the time of the reports (for instance start date cannot occur before the previous report).
+#' 	\item Sample missing or warning end dates for episodes having a valid or sampled start date. This is done by sampling from the distribution of symptom duration, truncated according to the time of the reports (for instance symptoms duration must exceed the time from start date to the penultimate report date of the episode). Then end date is set as start date plus symptom duration.
+#' }
+#' @param symptom_duration data.frame. Predicted distribution of symptom duration, as computed by \code{\link{predicted_distribution_symptom_duration}}
+#' @param time_to_report data.frame. Empirical distribution of time to report start dates, as computed by \code{\link{empirical_distribution_time_to_report}}
+#' @param sample_warning_start character vector. Resample start dates with those warnings.
+#' @param sample_warning_end vector character vector. Resample end dates with those warnings.
 #' @inheritParams summarize_symptoms
-#' @note TODO
+#' @seealso \code{\link{predicted_distribution_symptom_duration}}, \code{\link{empirical_distribution_time_to_report}}
 #' @export
 #' @import dplyr
 sample_missing_symptom_start_end_dates <- function(flunet, symptom_duration, time_to_report=NULL, sample_warning_start=NULL, sample_warning_end=NULL) {
@@ -198,8 +205,7 @@ sample_missing_symptom_start_end_dates <- function(flunet, symptom_duration, tim
 		stop("Levels of covariate(s) ",sQuote(names(x[!x])), " in the intake survey don't match the ones of the predicted distribution.",call.=FALSE)
 	}
 
-	# select episodes without (or with a warned) symptom_start
-	# call_filter <- parse(text=sprintf("filter(df_episode_intake, (is.na(symptom_start) | %s) & %s)",paste(sample_warning_start,collapse=" | "),paste(sprintf("!is.na(%s)",covariates),collapse=" & ")))
+	# select episodes without (or with a warning) symptom_start
 	call_filter <- parse(text=sprintf("filter(df_episode_intake, is.na(symptom_start) | %s)",paste(sample_warning_start,collapse=" | ")))
 	df_missing_start <- eval(call_filter)
 	df_keep <- anti_join(df_episode_intake,df_missing_start,by=names(df_episode_intake))
@@ -255,13 +261,10 @@ sample_missing_symptom_start_end_dates <- function(flunet, symptom_duration, tim
 
 	var_ordered <- get_ordered_variables(df_sampled_start_valid_end)
 	df_episode_intake <- rbind_list(df_sampled_start_valid_end, df_missing_start_keep, df_keep) %>% arrange(first_report_date) %>% set_ordered_variables(var_ordered)
-	# which(sapply(df_sampled_start_valid_end,is.ordered))
-
 
 	df_episode_intake <- df_episode_intake[setdiff(names(df_episode_intake),c("min_symptom_duration","max_symptom_duration","max_time_to_report_start_date","previous_report_date"))]
 
-	# select episodes without (or with a warned) symptom_end, a valid or sampled start dates and all covariates
-	call_filter <- parse(text=sprintf("filter(df_episode_intake, (is.na(symptom_end) | %s) & (!is.na(symptom_start) & (!(%s) | %s)) & %s)", paste(sample_warning_end, collapse=" | "), paste(sample_warning_start,collapse=" | "), paste(df_warning[c("WSSSFSD","WSSSFTTR"),"name"],collapse=" | "), paste(sprintf("!is.na(%s)",covariates),collapse=" & ")))
+	# select episodes without (or with a warning) symptom_end, a valid or sampled start dates and all covariates
 	df_missing_end <- eval(call_filter)
 	df_keep <- anti_join(df_episode_intake,df_missing_end,by=names(df_episode_intake))
 	
